@@ -38,3 +38,7 @@ tracing-subscriber = { version = "0.3" }
 
 # Performance & Memory
 jemallocator = "0.5"
+
+# Utilities
+dotenv = "0.15.0"
+
