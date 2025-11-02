@@ -1,11 +1,16 @@
 use crate::{config::DatabaseConfig, error::Result};
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 
 pub async fn create_pool(config: &DatabaseConfig) -> Result<PgPool> {
     let pool = PgPoolOptions::new()
         .max_connections(config.max_connections)
         .connect(&config.url)
         .await?;
+
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .expect("Failed to run migrations");
 
     tracing::info!(
         "Database connection established with {} max connections",
