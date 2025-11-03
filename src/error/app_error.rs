@@ -11,6 +11,7 @@ pub enum AppError {
     DatabaseError(sqlx::Error),
     ConfigError(String),
     InternalError(String),
+    NotFound(String),
 }
 
 impl fmt::Display for AppError {
@@ -19,6 +20,7 @@ impl fmt::Display for AppError {
             AppError::DatabaseError(e) => write!(f, "Database error: {}", e),
             AppError::ConfigError(msg) => write!(f, "Configuration error: {}", msg),
             AppError::InternalError(msg) => write!(f, "Internal error: {}", msg),
+            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
         }
     }
 }
@@ -51,6 +53,9 @@ impl IntoResponse for AppError {
             AppError::InternalError(ref msg) => {
                 tracing::error!("Internal error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, msg.as_str())
+            }
+            AppError::NotFound(ref msg) => {
+                (StatusCode::NOT_FOUND, msg.as_str())
             }
         };
 
