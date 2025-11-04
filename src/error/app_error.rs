@@ -12,6 +12,8 @@ pub enum AppError {
     ConfigError(String),
     InternalError(String),
     NotFound(String),
+    BadRequest(String),
+    Conflict(String),
 }
 
 impl fmt::Display for AppError {
@@ -21,6 +23,8 @@ impl fmt::Display for AppError {
             AppError::ConfigError(msg) => write!(f, "Configuration error: {}", msg),
             AppError::InternalError(msg) => write!(f, "Internal error: {}", msg),
             AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
+            AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
+            AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
         }
     }
 }
@@ -56,6 +60,12 @@ impl IntoResponse for AppError {
             }
             AppError::NotFound(ref msg) => {
                 (StatusCode::NOT_FOUND, msg.as_str())
+            }
+            AppError::BadRequest(ref msg) => {
+                (StatusCode::BAD_REQUEST, msg.as_str())
+            }
+            AppError::Conflict(ref msg) => {
+                (StatusCode::CONFLICT, msg.as_str())
             }
         };
 

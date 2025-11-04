@@ -1,7 +1,11 @@
 mod health;
 mod product;
+mod register;
 
-use axum::{Router, routing::get};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 use crate::AppState;
 
@@ -10,4 +14,9 @@ pub fn create_router() -> Router<AppState> {
         .route("/product/{id}", get(product::get_product))
         .route("/health", get(health::health_check))
         .route("/health/ready", get(health::readiness_check))
+        .nest("/auth", auth_routes())
+}
+
+fn auth_routes() -> Router<AppState> {
+    Router::new().route("/register", post(register::register_user))
 }
