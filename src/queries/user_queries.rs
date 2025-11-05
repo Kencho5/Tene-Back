@@ -23,3 +23,30 @@ pub async fn find_by_email(pool: &PgPool, email: &str) -> Result<Option<User>> {
 
     Ok(user)
 }
+
+pub async fn create_google_user(
+    pool: &PgPool,
+    email: &str,
+    name: &str,
+    google_id: &str,
+) -> Result<User> {
+    let user = sqlx::query_as::<_, User>(
+        "INSERT INTO users (email, name, google_id) VALUES ($1, $2, $3) RETURNING *",
+    )
+    .bind(email)
+    .bind(name)
+    .bind(google_id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(user)
+}
+
+pub async fn find_by_google_id(pool: &PgPool, google_id: &str) -> Result<Option<User>> {
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE google_id = $1")
+        .bind(google_id)
+        .fetch_optional(pool)
+        .await?;
+
+    Ok(user)
+}

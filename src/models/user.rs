@@ -7,6 +7,7 @@ pub struct User {
     pub email: String,
     pub name: String,
     pub password: Option<String>,
+    pub google_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -23,6 +24,11 @@ pub struct RegisterResponse {
     pub id: i32,
     pub email: String,
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GoogleAuthRequest {
+    pub id_token: String,
 }
 
 impl From<User> for RegisterResponse {

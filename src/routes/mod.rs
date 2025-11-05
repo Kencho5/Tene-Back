@@ -1,3 +1,4 @@
+mod google_auth;
 mod health;
 mod product;
 mod register;
@@ -18,5 +19,7 @@ pub fn create_router() -> Router<AppState> {
 }
 
 fn auth_routes() -> Router<AppState> {
-    Router::new().route("/register", post(register::register_user))
+    Router::new()
+        .route("/register", post(register::register_user))
+        .route("/google", post(google_auth::google_auth))
 }

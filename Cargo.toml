@@ -31,7 +31,7 @@ rust_decimal = "1.39.0"
 
 # Authentication & Security
 bcrypt = "0.17.1"
-# google-oauth = "1.11.3"
+google-oauth = "1.11"
 # jsonwebtoken = "9.3.0"
 
 # Logging
