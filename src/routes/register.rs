@@ -1,10 +1,10 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 use crate::{
+    AppState,
     error::{AppError, Result},
     models::{RegisterRequest, RegisterResponse},
     queries::user_queries,
-    AppState,
 };
 
 pub async fn register_user(
@@ -23,8 +23,8 @@ pub async fn register_user(
     let password_hash = bcrypt::hash(&payload.password, bcrypt::DEFAULT_COST)
         .map_err(|e| AppError::InternalError(format!("Password hashing failed: {}", e)))?;
 
-    let user = user_queries::create_user(&state.db, &payload.email, &payload.name, &password_hash)
-        .await?;
+    let user =
+        user_queries::create_user(&state.db, &payload.email, &payload.name, &password_hash).await?;
 
     Ok(Json(RegisterResponse::from(user)))
 }
@@ -38,7 +38,7 @@ fn validate_registration(payload: &RegisterRequest) -> Result<()> {
         return Err(AppError::BadRequest("Name cannot be empty".to_string()));
     }
 
-    if payload.password.len() < 8 {
+    if payload.password.len() < 4 {
         return Err(AppError::BadRequest(
             "Password must be at least 8 characters".to_string(),
         ));

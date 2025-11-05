@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde_json::json;
 use std::fmt;
@@ -52,21 +52,18 @@ impl IntoResponse for AppError {
             }
             AppError::ConfigError(ref msg) => {
                 tracing::error!("Configuration error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Server configuration error")
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Server configuration error",
+                )
             }
             AppError::InternalError(ref msg) => {
                 tracing::error!("Internal error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, msg.as_str())
             }
-            AppError::NotFound(ref msg) => {
-                (StatusCode::NOT_FOUND, msg.as_str())
-            }
-            AppError::BadRequest(ref msg) => {
-                (StatusCode::BAD_REQUEST, msg.as_str())
-            }
-            AppError::Conflict(ref msg) => {
-                (StatusCode::CONFLICT, msg.as_str())
-            }
+            AppError::NotFound(ref msg) => (StatusCode::NOT_FOUND, msg.as_str()),
+            AppError::BadRequest(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
+            AppError::Conflict(ref msg) => (StatusCode::CONFLICT, msg.as_str()),
         };
 
         let body = Json(json!({
