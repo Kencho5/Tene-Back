@@ -4,7 +4,7 @@ use std::env;
 
 use crate::error::{AppError, Result};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub email: String,

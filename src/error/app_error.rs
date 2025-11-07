@@ -14,6 +14,7 @@ pub enum AppError {
     NotFound(String),
     BadRequest(String),
     Conflict(String),
+    Unauthorized(String),
 }
 
 impl fmt::Display for AppError {
@@ -25,6 +26,7 @@ impl fmt::Display for AppError {
             AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
+            AppError::Unauthorized(_msg) => write!(f, "Unauthorized"),
         }
     }
 }
@@ -64,6 +66,7 @@ impl IntoResponse for AppError {
             AppError::NotFound(ref msg) => (StatusCode::NOT_FOUND, msg.as_str()),
             AppError::BadRequest(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
             AppError::Conflict(ref msg) => (StatusCode::CONFLICT, msg.as_str()),
+            AppError::Unauthorized(ref msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
         };
 
         let body = Json(json!({
