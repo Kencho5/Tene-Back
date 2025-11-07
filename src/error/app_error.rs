@@ -26,7 +26,7 @@ impl fmt::Display for AppError {
             AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
             AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
-            AppError::Unauthorized(_msg) => write!(f, "Unauthorized"),
+            AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
         }
     }
 }

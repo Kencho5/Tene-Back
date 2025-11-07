@@ -1,11 +1,12 @@
 mod google_auth;
 mod health;
+mod login;
 mod product;
 mod register;
 
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 
 use crate::AppState;
@@ -21,5 +22,6 @@ pub fn create_router() -> Router<AppState> {
 fn auth_routes() -> Router<AppState> {
     Router::new()
         .route("/register", post(register::register_user))
+        .route("/login", post(login::login_user))
         .route("/google", post(google_auth::google_auth))
 }

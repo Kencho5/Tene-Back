@@ -7,11 +7,11 @@ pub async fn auth_middleware(mut req: Request, next: Next) -> Result<Response, A
         .headers()
         .get(http::header::AUTHORIZATION)
         .and_then(|header| header.to_str().ok())
-        .ok_or_else(|| AppError::Unauthorized("Missing authorization header".to_string()))?;
+        .ok_or_else(|| AppError::Unauthorized("Authentication required".to_string()))?;
 
     let token = auth_header
         .strip_prefix("Bearer ")
-        .ok_or_else(|| AppError::Unauthorized("Invalid authorization format".to_string()))?;
+        .ok_or_else(|| AppError::Unauthorized("Invalid token format".to_string()))?;
 
     let claims = crate::utils::jwt::verify_token(token)?;
 
