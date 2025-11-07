@@ -20,10 +20,8 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Serialize)]
-pub struct RegisterResponse {
-    pub id: i32,
-    pub email: String,
-    pub name: String,
+pub struct AuthResponse {
+    pub token: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -31,12 +29,3 @@ pub struct GoogleAuthRequest {
     pub id_token: String,
 }
 
-impl From<User> for RegisterResponse {
-    fn from(user: User) -> Self {
-        Self {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-        }
-    }
-}

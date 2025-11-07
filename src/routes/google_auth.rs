@@ -3,15 +3,16 @@ use google_oauth::AsyncClient;
 
 use crate::{
     error::{AppError, Result},
-    models::{GoogleAuthRequest, RegisterResponse},
+    models::{AuthResponse, GoogleAuthRequest},
     queries::user_queries,
+    utils::jwt,
     AppState,
 };
 
 pub async fn google_auth(
     State(state): State<AppState>,
     Json(payload): Json<GoogleAuthRequest>,
-) -> Result<Json<RegisterResponse>> {
+) -> Result<Json<AuthResponse>> {
     let google_client_id = std::env::var("GOOGLE_CLIENT_ID")
         .map_err(|_| AppError::ConfigError("GOOGLE_CLIENT_ID not set".to_string()))?;
 
@@ -32,21 +33,21 @@ pub async fn google_auth(
         .as_ref()
         .ok_or_else(|| AppError::BadRequest("Name not provided by Google".to_string()))?;
 
-    if let Some(existing_user) = user_queries::find_by_google_id(&state.db, google_id).await? {
-        return Ok(Json(RegisterResponse::from(existing_user)));
-    }
-
-    if let Some(existing_user) = user_queries::find_by_email(&state.db, email).await? {
+    let user = if let Some(existing_user) = user_queries::find_by_google_id(&state.db, google_id).await? {
+        existing_user
+    } else if let Some(existing_user) = user_queries::find_by_email(&state.db, email).await? {
         if existing_user.password.is_some() {
             return Err(AppError::Conflict(
                 "Email already registered with password. Please login with email/password"
                     .to_string(),
             ));
         }
-        return Ok(Json(RegisterResponse::from(existing_user)));
-    }
+        existing_user
+    } else {
+        user_queries::create_google_user(&state.db, email, name, google_id).await?
+    };
 
-    let user = user_queries::create_google_user(&state.db, email, name, google_id).await?;
+    let token = jwt::generate_token(user.id, &user.email)?;
 
-    Ok(Json(RegisterResponse::from(user)))
+    Ok(Json(AuthResponse { token }))
 }

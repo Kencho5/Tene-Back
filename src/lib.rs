@@ -5,6 +5,7 @@ pub mod error;
 pub mod models;
 pub mod queries;
 pub mod routes;
+pub mod utils;
 
 pub use app::AppState;
 pub use config::AppConfig;

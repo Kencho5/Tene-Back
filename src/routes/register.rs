@@ -1,16 +1,17 @@
-use axum::{Json, extract::State};
+use axum::{extract::State, Json};
 
 use crate::{
-    AppState,
     error::{AppError, Result},
-    models::{RegisterRequest, RegisterResponse},
+    models::{AuthResponse, RegisterRequest},
     queries::user_queries,
+    utils::jwt,
+    AppState,
 };
 
 pub async fn register_user(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
-) -> Result<Json<RegisterResponse>> {
+) -> Result<Json<AuthResponse>> {
     validate_registration(&payload)?;
 
     if user_queries::find_by_email(&state.db, &payload.email)
@@ -26,7 +27,9 @@ pub async fn register_user(
     let user =
         user_queries::create_user(&state.db, &payload.email, &payload.name, &password_hash).await?;
 
-    Ok(Json(RegisterResponse::from(user)))
+    let token = jwt::generate_token(user.id, &user.email)?;
+
+    Ok(Json(AuthResponse { token }))
 }
 
 fn validate_registration(payload: &RegisterRequest) -> Result<()> {
