@@ -1,5 +1,7 @@
+mod email;
 mod product;
 mod user;
 
-pub use product::Product;
-pub use user::{AuthResponse, GoogleAuthRequest, LoginRequest, RegisterRequest, User};
+pub use email::*;
+pub use product::*;
+pub use user::*;

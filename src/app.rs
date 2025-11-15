@@ -1,21 +1,28 @@
+pub use aws_sdk_sesv2::Client as SesClient;
 use axum::{
+    Router,
     extract::DefaultBodyLimit,
     http::{HeaderValue, Method},
-    Router,
 };
 use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 
-use crate::{config::AppConfig, database, error::Result, routes};
+use crate::{config, config::AppConfig, database, error::Result, routes};
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
+    pub ses_client: SesClient,
 }
 
 pub async fn build(config: &AppConfig) -> Result<Router> {
     let pool = database::create_pool(&config.database).await?;
-    let state = AppState { db: pool };
+    let ses_client = config::load_ses_client().await?;
+
+    let state = AppState {
+        db: pool,
+        ses_client,
+    };
     let allowed_origins: Vec<HeaderValue> = config
         .cors
         .allowed_origins
@@ -29,10 +36,7 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([
-            http::header::CONTENT_TYPE,
-            http::header::AUTHORIZATION,
-        ])
+        .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION])
         .allow_origin(allowed_origins);
 
     let app = routes::create_router()
