@@ -17,4 +17,5 @@ CREATE INDEX idx_products_price ON products(price);
 CREATE INDEX idx_products_name ON products(name);
 CREATE INDEX idx_products_discount ON products(discount DESC);
 CREATE INDEX idx_products_quantity ON products(quantity);
+CREATE INDEX idx_products_colors ON products USING GIN (colors);
 CREATE INDEX idx_products_specifications ON products USING GIN (specifications);
