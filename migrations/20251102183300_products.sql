@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS products (
     description TEXT,
     price DECIMAL(10, 2) NOT NULL,
     discount DECIMAL(5, 2) DEFAULT 0.00 CHECK (discount >= 0 AND discount <= 100),
-    color VARCHAR(100),
+    colors TEXT[] DEFAULT '{}',
     quantity INTEGER DEFAULT 0 CHECK (quantity >= 0),
     specifications JSONB DEFAULT '{}'::JSONB,
     image_url TEXT,
