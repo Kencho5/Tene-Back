@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS products (
     quantity INTEGER DEFAULT 0 CHECK (quantity >= 0),
     specifications JSONB DEFAULT '{}'::JSONB,
     image_url TEXT,
+    product_type TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -19,3 +20,4 @@ CREATE INDEX idx_products_discount ON products(discount DESC);
 CREATE INDEX idx_products_quantity ON products(quantity);
 CREATE INDEX idx_products_colors ON products USING GIN (colors);
 CREATE INDEX idx_products_specifications ON products USING GIN (specifications);
+CREATE INDEX idx_products_product_type ON products(product_type);
