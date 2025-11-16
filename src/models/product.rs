@@ -8,7 +8,12 @@ pub struct Product {
     pub name: String,
     pub description: Option<String>,
     pub price: Decimal,
-    pub image_url: Option<String>,
+    pub discount: Decimal,
+    pub colors: Vec<String>,
+    pub quantity: i16,
+    pub specifications: serde_json::Value,
+    pub image_url: String,
+    pub product_type: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
