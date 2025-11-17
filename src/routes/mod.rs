@@ -14,10 +14,10 @@ use crate::AppState;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .route("/product/{id}", get(products::get_product))
         .route("/health", get(health::health_check))
         .route("/health/ready", get(health::readiness_check))
         .nest("/auth", auth_routes())
+        .merge(products_routes())
 }
 
 fn auth_routes() -> Router<AppState> {
@@ -27,4 +27,8 @@ fn auth_routes() -> Router<AppState> {
         .route("/google", post(google_auth::google_auth))
         .route("/send-code", post(send_code::send_verification_code))
         .route("/verify-code", post(send_code::verify_code))
+}
+
+fn products_routes() -> Router<AppState> {
+    Router::new().route("/product/{id}", get(products::get_product))
 }
