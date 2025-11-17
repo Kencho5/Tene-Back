@@ -1,7 +1,7 @@
 mod email;
-mod product;
+mod products;
 mod user;
 
 pub use email::*;
-pub use product::*;
+pub use products::*;
 pub use user::*;
