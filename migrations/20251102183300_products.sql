@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS products (
     colors TEXT[] DEFAULT '{}',
     quantity INTEGER DEFAULT 0 CHECK (quantity >= 0),
     specifications JSONB DEFAULT '{}'::JSONB,
-    image_count INTEGER DEFAULT 1,
+    image_ids TEXT[] NOT NULL,
     product_type TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

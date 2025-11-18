@@ -12,7 +12,7 @@ pub struct Product {
     pub colors: Vec<String>,
     pub quantity: i32,
     pub specifications: serde_json::Value,
-    pub image_count: i32,
+    pub image_ids: Vec<String>,
     pub product_type: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
