@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Product {
@@ -15,4 +16,18 @@ pub struct Product {
     pub product_type: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ProductImage {
+    pub product_id: i32,
+    pub image_uuid: Uuid,
+    pub color: Option<String>,
+    pub is_primary: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProductResponse {
+    pub product: Product,
+    pub images: Vec<ProductImage>,
 }
