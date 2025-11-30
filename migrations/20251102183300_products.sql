@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS products (
     description TEXT,
     price DECIMAL(10, 2) NOT NULL,
     discount DECIMAL(5, 2) DEFAULT 0.00 CHECK (discount >= 0 AND discount <= 100),
-    colors TEXT[] DEFAULT '{}',
     quantity INTEGER DEFAULT 0 CHECK (quantity >= 0),
     specifications JSONB DEFAULT '{}'::JSONB,
     product_type TEXT NOT NULL,
@@ -17,6 +16,5 @@ CREATE INDEX idx_products_price ON products(price);
 CREATE INDEX idx_products_name ON products(name);
 CREATE INDEX idx_products_discount ON products(discount DESC);
 CREATE INDEX idx_products_quantity ON products(quantity);
-CREATE INDEX idx_products_colors ON products USING GIN (colors);
 CREATE INDEX idx_products_specifications ON products USING GIN (specifications);
 CREATE INDEX idx_products_product_type ON products(product_type);

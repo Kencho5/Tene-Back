@@ -10,7 +10,6 @@ pub struct Product {
     pub description: Option<String>,
     pub price: Decimal,
     pub discount: Decimal,
-    pub colors: Vec<String>,
     pub quantity: i32,
     pub specifications: serde_json::Value,
     pub product_type: String,
