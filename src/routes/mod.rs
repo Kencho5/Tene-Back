@@ -4,13 +4,15 @@ mod login;
 mod products;
 mod register;
 mod send_code;
+mod user_addresses;
 
 use axum::{
-    Router,
+    middleware,
     routing::{get, post},
+    Router,
 };
 
-use crate::AppState;
+use crate::{middleware::auth_middleware, AppState};
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
@@ -18,6 +20,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/health/ready", get(health::readiness_check))
         .nest("/auth", auth_routes())
         .merge(products_routes())
+        .merge(user_routes())
 }
 
 fn auth_routes() -> Router<AppState> {
@@ -31,4 +34,10 @@ fn auth_routes() -> Router<AppState> {
 
 fn products_routes() -> Router<AppState> {
     Router::new().route("/product/{id}", get(products::get_product))
+}
+
+fn user_routes() -> Router<AppState> {
+    Router::new()
+        .route("/add-address", post(user_addresses::add_address))
+        .layer(middleware::from_fn(auth_middleware))
 }

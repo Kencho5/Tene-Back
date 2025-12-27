@@ -1,10 +1,18 @@
 use sqlx::PgPool;
 
-use crate::{error::Result, models::User};
+use crate::{
+    error::Result,
+    models::{User, UserAddress},
+};
 
-pub async fn create_user(pool: &PgPool, email: &str, name: &str, password_hash: &str) -> Result<User> {
+pub async fn create_user(
+    pool: &PgPool,
+    email: &str,
+    name: &str,
+    password_hash: &str,
+) -> Result<User> {
     let user = sqlx::query_as::<_, User>(
-        "INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING *"
+        "INSERT INTO users (email, name, password) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(email)
     .bind(name)
@@ -49,4 +57,18 @@ pub async fn find_by_google_id(pool: &PgPool, google_id: &str) -> Result<Option<
         .await?;
 
     Ok(user)
+}
+
+pub async fn add_user_address(pool: &PgPool, user_id: i32, payload: UserAddress) -> Result<UserAddress> {
+    let address = sqlx::query_as::<_, UserAddress>(
+        "INSERT INTO user_addresses (user_id, city, address, details) VALUES ($1, $2, $3, $4) RETURNING city, address, details"
+    )
+        .bind(user_id)
+        .bind(payload.city)
+        .bind(payload.address)
+        .bind(payload.details)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(address)
 }

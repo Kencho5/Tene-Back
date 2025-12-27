@@ -34,3 +34,10 @@ pub struct AuthResponse {
 pub struct GoogleAuthRequest {
     pub id_token: String,
 }
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct UserAddress {
+    pub city: String,
+    pub address: String,
+    pub details: String,
+}
