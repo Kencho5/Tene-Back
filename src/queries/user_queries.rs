@@ -59,7 +59,11 @@ pub async fn find_by_google_id(pool: &PgPool, google_id: &str) -> Result<Option<
     Ok(user)
 }
 
-pub async fn add_user_address(pool: &PgPool, user_id: i32, payload: UserAddress) -> Result<UserAddress> {
+pub async fn add_user_address(
+    pool: &PgPool,
+    user_id: i32,
+    payload: UserAddress,
+) -> Result<UserAddress> {
     let address = sqlx::query_as::<_, UserAddress>(
         "INSERT INTO user_addresses (user_id, city, address, details) VALUES ($1, $2, $3, $4) RETURNING city, address, details"
     )
@@ -71,4 +75,15 @@ pub async fn add_user_address(pool: &PgPool, user_id: i32, payload: UserAddress)
         .await?;
 
     Ok(address)
+}
+
+pub async fn get_user_addresses(pool: &PgPool, user_id: i32) -> Result<Vec<UserAddress>> {
+    let addresses = sqlx::query_as::<_, UserAddress>(
+        "SELECT city, address, details FROM user_addresses WHERE user_id = $1",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(addresses)
 }

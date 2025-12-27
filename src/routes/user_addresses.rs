@@ -4,7 +4,7 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::UserAddress,
-    queries::user_queries::add_user_address,
+    queries::user_queries::{add_user_address, get_user_addresses},
     utils::jwt::Claims,
 };
 
@@ -21,4 +21,18 @@ pub async fn add_address(
     let address = add_user_address(&state.db, user_id, payload).await?;
 
     Ok(Json(address))
+}
+
+pub async fn get_address(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<Vec<UserAddress>>> {
+    let user_id = claims
+        .sub
+        .parse::<i32>()
+        .map_err(|_| AppError::Unauthorized("Unauthorized".to_string()))?;
+
+    let addresses = get_user_addresses(&state.db, user_id).await?;
+
+    Ok(Json(addresses))
 }

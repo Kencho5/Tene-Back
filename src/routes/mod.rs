@@ -38,5 +38,6 @@ fn products_routes() -> Router<AppState> {
 fn user_routes() -> Router<AppState> {
     Router::new()
         .route("/addresses", post(user_addresses::add_address))
+        .route("/addresses", get(user_addresses::get_address))
         .layer(middleware::from_fn(auth_middleware))
 }
