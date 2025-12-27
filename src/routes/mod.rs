@@ -7,12 +7,11 @@ mod send_code;
 mod user_addresses;
 
 use axum::{
-    middleware,
+    Router, middleware,
     routing::{get, post},
-    Router,
 };
 
-use crate::{middleware::auth_middleware, AppState};
+use crate::{AppState, middleware::auth_middleware};
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
@@ -38,6 +37,6 @@ fn products_routes() -> Router<AppState> {
 
 fn user_routes() -> Router<AppState> {
     Router::new()
-        .route("/add-address", post(user_addresses::add_address))
+        .route("/addresses", post(user_addresses::add_address))
         .layer(middleware::from_fn(auth_middleware))
 }
