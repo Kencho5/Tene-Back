@@ -37,6 +37,7 @@ pub struct GoogleAuthRequest {
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct UserAddress {
+    pub id: i32,
     pub city: String,
     pub address: String,
     pub details: String,

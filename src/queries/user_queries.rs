@@ -79,7 +79,7 @@ pub async fn add_user_address(
 
 pub async fn get_user_addresses(pool: &PgPool, user_id: i32) -> Result<Vec<UserAddress>> {
     let addresses = sqlx::query_as::<_, UserAddress>(
-        "SELECT city, address, details FROM user_addresses WHERE user_id = $1",
+        "SELECT id, city, address, details FROM user_addresses WHERE user_id = $1",
     )
     .bind(user_id)
     .fetch_all(pool)
