@@ -35,7 +35,7 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
         .collect::<Result<Vec<_>>>()?;
 
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::OPTIONS])
         .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION])
         .allow_origin(allowed_origins);
 
