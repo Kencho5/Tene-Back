@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::{
-    error::{AppError, Result},
+    error::Result,
     models::{User, UserAddress},
 };
 
@@ -65,7 +65,7 @@ pub async fn add_user_address(
     payload: UserAddress,
 ) -> Result<UserAddress> {
     let address = sqlx::query_as::<_, UserAddress>(
-        "INSERT INTO user_addresses (user_id, city, address, details) VALUES ($1, $2, $3, $4) RETURNING city, address, details"
+        "INSERT INTO user_addresses (user_id, city, address, details) VALUES ($1, $2, $3, $4) RETURNING id, city, address, details"
     )
         .bind(user_id)
         .bind(payload.city)
