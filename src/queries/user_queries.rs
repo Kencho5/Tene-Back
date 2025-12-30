@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::{
-    error::Result,
+    error::{AppError, Result},
     models::{User, UserAddress},
 };
 
@@ -86,4 +86,25 @@ pub async fn get_user_addresses(pool: &PgPool, user_id: i32) -> Result<Vec<UserA
     .await?;
 
     Ok(addresses)
+}
+
+pub async fn edit_user_address(
+    pool: &PgPool,
+    user_id: i32,
+    address_id: i32,
+    payload: UserAddress,
+) -> Result<UserAddress> {
+    let address = sqlx::query_as::<_, UserAddress>(
+        "UPDATE user_addresses SET city = $1, address = $2, details = $3 WHERE user_id = $4 AND id = $5 RETURNING id, city, address, details"
+    )
+    .bind(payload.city)
+    .bind(payload.address)
+    .bind(payload.details)
+    .bind(user_id)
+    .bind(address_id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or(AppError::NotFound("Address not found".to_string()))?;
+
+    Ok(address)
 }
