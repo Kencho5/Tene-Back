@@ -26,13 +26,13 @@ fn auth_routes() -> Router<AppState> {
     Router::new()
         .route("/register", post(register::register_user))
         .route("/login", post(login::login_user))
-        .route("/google", post(google_auth::google_auth))
+        .route("/google-login", post(google_auth::google_auth))
         .route("/send-code", post(send_code::send_verification_code))
         .route("/verify-code", post(send_code::verify_code))
 }
 
 fn products_routes() -> Router<AppState> {
-    Router::new().route("/product/{id}", get(products::get_product))
+    Router::new().route("/products/{id}", get(products::get_product))
 }
 
 fn user_routes() -> Router<AppState> {
