@@ -30,3 +30,12 @@ pub struct ProductResponse {
     pub product: Product,
     pub images: Vec<ProductImage>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProductQuery {
+    pub query: Option<String>,
+    pub price_from: Option<i16>,
+    pub price_to: Option<i16>,
+    pub sale_type: Option<String>,
+    pub brand: Option<String>,
+}
