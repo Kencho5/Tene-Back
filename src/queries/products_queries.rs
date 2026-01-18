@@ -1,4 +1,4 @@
-use sqlx::{PgPool, QueryBuilder, Postgres};
+use sqlx::{PgPool, Postgres, QueryBuilder};
 
 use crate::{
     error::Result,
@@ -14,10 +14,7 @@ pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
     Ok(product)
 }
 
-pub async fn find_images_by_product_id(
-    pool: &PgPool,
-    id: i32,
-) -> Result<Vec<ProductImage>> {
+pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<ProductImage>> {
     let product_images = sqlx::query_as::<_, ProductImage>(
         "SELECT product_id, image_uuid, color, is_primary
          FROM product_images
@@ -80,22 +77,32 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
             query.push(")) DESC");
 
             match params.sort_by {
-                Some(SortBy::PriceAsc) => query.push(", price ASC"),
-                Some(SortBy::PriceDesc) => query.push(", price DESC"),
-                None => query.push(", created_at DESC"),
+                Some(SortBy::PriceAsc) => {
+                    query.push(", price ASC");
+                }
+                Some(SortBy::PriceDesc) => {
+                    query.push(", price DESC");
+                }
+                None => {
+                    query.push(", created_at DESC");
+                }
             }
         }
     } else {
         match params.sort_by {
-            Some(SortBy::PriceAsc) => query.push("price ASC"),
-            Some(SortBy::PriceDesc) => query.push("price DESC"),
-            None => query.push("created_at DESC"),
+            Some(SortBy::PriceAsc) => {
+                query.push("price ASC");
+            }
+            Some(SortBy::PriceDesc) => {
+                query.push("price DESC");
+            }
+            None => {
+                query.push("created_at DESC");
+            }
         }
     }
 
-    let products = query.build_query_as::<Product>()
-        .fetch_all(pool)
-        .await?;
+    let products = query.build_query_as::<Product>().fetch_all(pool).await?;
 
     Ok(products)
 }
