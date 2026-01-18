@@ -32,10 +32,18 @@ pub struct ProductResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    PriceAsc,
+    PriceDesc,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProductQuery {
     pub query: Option<String>,
     pub price_from: Option<i16>,
     pub price_to: Option<i16>,
     pub sale_type: Option<String>,
     pub brand: Option<String>,
+    pub sort_by: Option<SortBy>,
 }

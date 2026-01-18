@@ -2,7 +2,7 @@ use sqlx::{PgPool, QueryBuilder, Postgres};
 
 use crate::{
     error::Result,
-    models::{Product, ProductImage, ProductQuery},
+    models::{Product, ProductImage, ProductQuery, SortBy},
 };
 
 pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
@@ -69,16 +69,28 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
         query.push_bind(format!("%{}%", brand));
     }
 
+    query.push(" ORDER BY ");
+
     if has_text_search {
         if let Some(ref q) = params.query {
-            query.push(" ORDER BY GREATEST(similarity(name, ");
+            query.push("GREATEST(similarity(name, ");
             query.push_bind(q);
             query.push("), similarity(COALESCE(description, ''), ");
             query.push_bind(q);
-            query.push(")) DESC, created_at DESC");
+            query.push(")) DESC");
+
+            match params.sort_by {
+                Some(SortBy::PriceAsc) => query.push(", price ASC"),
+                Some(SortBy::PriceDesc) => query.push(", price DESC"),
+                None => query.push(", created_at DESC"),
+            }
         }
     } else {
-        query.push(" ORDER BY created_at DESC");
+        match params.sort_by {
+            Some(SortBy::PriceAsc) => query.push("price ASC"),
+            Some(SortBy::PriceDesc) => query.push("price DESC"),
+            None => query.push("created_at DESC"),
+        }
     }
 
     let products = query.build_query_as::<Product>()
