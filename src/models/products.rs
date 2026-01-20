@@ -13,6 +13,7 @@ pub struct Product {
     pub quantity: i32,
     pub specifications: serde_json::Value,
     pub product_type: String,
+    pub brand: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -46,4 +47,16 @@ pub struct ProductQuery {
     pub sale_type: Option<String>,
     pub brand: Option<String>,
     pub sort_by: Option<SortBy>,
+}
+
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct FacetValue {
+    pub value: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProductFacets {
+    pub brands: Vec<FacetValue>,
+    pub colors: Vec<FacetValue>,
 }

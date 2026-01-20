@@ -4,7 +4,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder};
 
 use crate::{
     error::Result,
-    models::{Product, ProductImage, ProductQuery, ProductResponse, SortBy},
+    models::{FacetValue, Product, ProductFacets, ProductImage, ProductQuery, ProductResponse, SortBy},
 };
 
 pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
@@ -64,8 +64,8 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
     }
 
     if let Some(ref brand) = params.brand {
-        query.push(" AND specifications->>'brand' ILIKE ");
-        query.push_bind(format!("%{}%", brand));
+        query.push(" AND brand = ");
+        query.push_bind(brand);
     }
 
     query.push(" ORDER BY ");
@@ -139,4 +139,56 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
         .collect();
 
     Ok(result)
+}
+
+pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
+    let mut where_conditions = String::from("WHERE 1=1");
+    let mut bindings: Vec<String> = Vec::new();
+
+    if let Some(ref q) = params.query {
+        where_conditions.push_str(" AND (name ILIKE $1 OR description ILIKE $1 OR similarity(name, $1) > 0.3 OR similarity(COALESCE(description, ''), $1) > 0.3)");
+        bindings.push(format!("%{}%", q));
+    }
+
+    let brands_query = format!(
+        "SELECT
+            brand as value,
+            COUNT(*)::bigint as count
+         FROM products
+         {}
+         AND brand IS NOT NULL
+         AND brand != ''
+         GROUP BY brand
+         ORDER BY count DESC
+         LIMIT 50",
+        where_conditions
+    );
+
+    let colors_query = format!(
+        "SELECT
+            pi.color as value,
+            COUNT(DISTINCT p.id)::bigint as count
+         FROM products p
+         JOIN product_images pi ON p.id = pi.product_id
+         {}
+         AND pi.color IS NOT NULL
+         AND pi.color != ''
+         GROUP BY pi.color
+         ORDER BY count DESC
+         LIMIT 50",
+        where_conditions
+    );
+
+    let mut brands_q = sqlx::query_as::<_, FacetValue>(&brands_query);
+    let mut colors_q = sqlx::query_as::<_, FacetValue>(&colors_query);
+
+    for binding in &bindings {
+        brands_q = brands_q.bind(binding);
+        colors_q = colors_q.bind(binding);
+    }
+
+    let brands = brands_q.fetch_all(pool).await?;
+    let colors = colors_q.fetch_all(pool).await?;
+
+    Ok(ProductFacets { brands, colors })
 }

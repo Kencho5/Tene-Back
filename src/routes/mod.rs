@@ -34,6 +34,7 @@ fn auth_routes() -> Router<AppState> {
 fn products_routes() -> Router<AppState> {
     Router::new()
         .route("/products", get(products::search_product))
+        .route("/products/facets", get(products::get_product_facets))
         .route("/products/{id}", get(products::get_product))
 }
 
