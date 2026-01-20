@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use sqlx::{PgPool, Postgres, QueryBuilder};
 
 use crate::{
     error::Result,
-    models::{Product, ProductImage, ProductQuery, SortBy},
+    models::{Product, ProductImage, ProductQuery, ProductResponse, SortBy},
 };
 
 pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
@@ -28,7 +30,7 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
     Ok(product_images)
 }
 
-pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<Product>> {
+pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<ProductResponse>> {
     let mut query: QueryBuilder<Postgres> = QueryBuilder::new("SELECT * FROM products WHERE 1=1");
     let mut has_text_search = false;
 
@@ -104,5 +106,37 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
 
     let products = query.build_query_as::<Product>().fetch_all(pool).await?;
 
-    Ok(products)
+    if products.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let product_ids: Vec<i32> = products.iter().map(|p| p.id).collect();
+
+    let all_images = sqlx::query_as::<_, ProductImage>(
+        "SELECT product_id, image_uuid, color, is_primary
+         FROM product_images
+         WHERE product_id = ANY($1)
+         ORDER BY product_id, is_primary DESC, created_at ASC"
+    )
+    .bind(&product_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut images_map: HashMap<i32, Vec<ProductImage>> = HashMap::new();
+    for image in all_images {
+        images_map
+            .entry(image.product_id)
+            .or_insert_with(Vec::new)
+            .push(image);
+    }
+
+    let result: Vec<ProductResponse> = products
+        .into_iter()
+        .map(|product| {
+            let images = images_map.remove(&product.id).unwrap_or_default();
+            ProductResponse { product, images }
+        })
+        .collect();
+
+    Ok(result)
 }

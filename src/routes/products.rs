@@ -6,14 +6,14 @@ use axum::{
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{Product, ProductQuery, ProductResponse},
+    models::{ProductQuery, ProductResponse},
     queries::products_queries,
 };
 
 pub async fn search_product(
     State(state): State<AppState>,
     Query(params): Query<ProductQuery>,
-) -> Result<Json<Vec<Product>>> {
+) -> Result<Json<Vec<ProductResponse>>> {
     let products = products_queries::search_products(&state.db, params).await?;
 
     Ok(Json(products))
