@@ -4,7 +4,10 @@ use sqlx::{PgPool, Postgres, QueryBuilder};
 
 use crate::{
     error::Result,
-    models::{FacetValue, Product, ProductFacets, ProductImage, ProductQuery, ProductResponse, SortBy},
+    models::{
+        FacetValue, Product, ProductFacets, ProductImage, ProductQuery, ProductResponse, SaleType,
+        SortBy,
+    },
 };
 
 pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
@@ -30,24 +33,32 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
     Ok(product_images)
 }
 
+const SIMILARITY_THRESHOLD: f64 = 0.3;
+const DEFAULT_PAGE_SIZE: i64 = 6;
+const MAX_PAGE_SIZE: i64 = 100;
+
 pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<ProductResponse>> {
     let mut query: QueryBuilder<Postgres> = QueryBuilder::new("SELECT * FROM products WHERE 1=1");
-    let mut has_text_search = false;
+    let has_text_search = params.query.is_some();
 
+    // text search
     if let Some(ref q) = params.query {
-        has_text_search = true;
         query.push(" AND (name ILIKE ");
         query.push_bind(format!("%{}%", q));
         query.push(" OR description ILIKE ");
         query.push_bind(format!("%{}%", q));
         query.push(" OR similarity(name, ");
         query.push_bind(q);
-        query.push(") > 0.3");
+        query.push(") > ");
+        query.push_bind(SIMILARITY_THRESHOLD);
         query.push(" OR similarity(COALESCE(description, ''), ");
         query.push_bind(q);
-        query.push(") > 0.3)");
+        query.push(") > ");
+        query.push_bind(SIMILARITY_THRESHOLD);
+        query.push(")");
     }
 
+    // price range
     if let Some(price_from) = params.price_from {
         query.push(" AND price >= ");
         query.push_bind(price_from);
@@ -58,16 +69,38 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
         query.push_bind(price_to);
     }
 
-    if let Some(ref sale_type) = params.sale_type {
+    // category
+    if let Some(ref product_type) = params.product_type {
         query.push(" AND product_type = ");
-        query.push_bind(sale_type);
+        query.push_bind(product_type);
     }
 
+    // brand
     if let Some(ref brand) = params.brand {
         query.push(" AND brand = ");
         query.push_bind(brand);
     }
 
+    // color
+    if let Some(ref color) = params.color {
+        query.push(" AND EXISTS (SELECT 1 FROM product_images WHERE product_id = products.id AND color = ");
+        query.push_bind(color);
+        query.push(")");
+    }
+
+    // sale type
+    if let Some(ref sale_type) = params.sale_type {
+        match sale_type {
+            SaleType::Discount => {
+                query.push(" AND discount > 0");
+            }
+            SaleType::Coins => {
+                // TODO: add coin_price column
+            }
+        }
+    }
+
+    // sort
     query.push(" ORDER BY ");
 
     if has_text_search {
@@ -104,6 +137,20 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
         }
     }
 
+    // pagination
+    let limit = params
+        .limit
+        .unwrap_or(DEFAULT_PAGE_SIZE)
+        .min(MAX_PAGE_SIZE);
+
+    query.push(" LIMIT ");
+    query.push_bind(limit);
+
+    if let Some(offset) = params.offset {
+        query.push(" OFFSET ");
+        query.push_bind(offset);
+    }
+
     let products = query.build_query_as::<Product>().fetch_all(pool).await?;
 
     if products.is_empty() {
@@ -116,7 +163,7 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
         "SELECT product_id, image_uuid, color, is_primary
          FROM product_images
          WHERE product_id = ANY($1)
-         ORDER BY product_id, is_primary DESC, created_at ASC"
+         ORDER BY product_id, is_primary DESC, created_at ASC",
     )
     .bind(&product_ids)
     .fetch_all(pool)

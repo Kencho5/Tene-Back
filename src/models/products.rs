@@ -40,13 +40,24 @@ pub enum SortBy {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SaleType {
+    Discount,
+    Coins,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProductQuery {
     pub query: Option<String>,
     pub price_from: Option<i16>,
     pub price_to: Option<i16>,
-    pub sale_type: Option<String>,
+    pub product_type: Option<String>,
     pub brand: Option<String>,
+    pub color: Option<String>,
+    pub sale_type: Option<SaleType>,
     pub sort_by: Option<SortBy>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
