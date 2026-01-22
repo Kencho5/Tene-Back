@@ -28,8 +28,16 @@ pub struct ProductImage {
 
 #[derive(Debug, Serialize)]
 pub struct ProductResponse {
-    pub product: Product,
+    pub data: Product,
     pub images: Vec<ProductImage>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProductSearchResponse {
+    pub products: Vec<ProductResponse>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,7 +47,7 @@ pub enum SortBy {
     PriceDesc,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SaleType {
     Discount,
@@ -53,8 +61,10 @@ pub struct ProductQuery {
     pub price_to: Option<i16>,
     pub product_type: Option<String>,
     pub brand: Option<String>,
-    pub color: Option<String>,
-    pub sale_type: Option<SaleType>,
+    #[serde(default)]
+    pub color: Vec<String>,
+    #[serde(default)]
+    pub sale_type: Vec<SaleType>,
     pub sort_by: Option<SortBy>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,

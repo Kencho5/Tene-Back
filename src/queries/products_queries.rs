@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use sqlx::{PgPool, Postgres, QueryBuilder};
+use sqlx::PgPool;
 
 use crate::{
     error::Result,
@@ -37,129 +37,112 @@ const SIMILARITY_THRESHOLD: f64 = 0.3;
 const DEFAULT_PAGE_SIZE: i64 = 6;
 const MAX_PAGE_SIZE: i64 = 100;
 
-pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<ProductResponse>> {
-    let mut query: QueryBuilder<Postgres> = QueryBuilder::new("SELECT * FROM products WHERE 1=1");
-    let has_text_search = params.query.is_some();
+pub async fn search_products(
+    pool: &PgPool,
+    params: ProductQuery,
+) -> Result<crate::models::ProductSearchResponse> {
+    let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+    let offset = params.offset.unwrap_or(0);
 
-    // text search
-    if let Some(ref q) = params.query {
-        query.push(" AND (name ILIKE ");
-        query.push_bind(format!("%{}%", q));
-        query.push(" OR description ILIKE ");
-        query.push_bind(format!("%{}%", q));
-        query.push(" OR similarity(name, ");
-        query.push_bind(q);
-        query.push(") > ");
-        query.push_bind(SIMILARITY_THRESHOLD);
-        query.push(" OR similarity(COALESCE(description, ''), ");
-        query.push_bind(q);
-        query.push(") > ");
-        query.push_bind(SIMILARITY_THRESHOLD);
-        query.push(")");
+    let search_pattern = params.query.as_ref().map(|q| format!("%{}%", q));
+    let sort_price_asc = matches!(params.sort_by, Some(SortBy::PriceAsc));
+    let sort_price_desc = matches!(params.sort_by, Some(SortBy::PriceDesc));
+
+    let has_discount_filter = params.sale_type.contains(&SaleType::Discount);
+    let has_coins_filter = params.sale_type.contains(&SaleType::Coins);
+    let colors_array: Vec<&str> = params.color.iter().map(|s| s.as_str()).collect();
+
+    #[derive(sqlx::FromRow)]
+    struct SearchResult {
+        #[sqlx(flatten)]
+        product: Product,
+        total_count: i64,
     }
 
-    // price range
-    if let Some(price_from) = params.price_from {
-        query.push(" AND price >= ");
-        query.push_bind(price_from);
+    let results = sqlx::query_as::<_, SearchResult>(
+        r#"
+        WITH filtered_products AS (
+            SELECT
+                p.*,
+                CASE
+                    WHEN $2::text IS NOT NULL THEN
+                        GREATEST(
+                            similarity(p.name, $2),
+                            similarity(COALESCE(p.description, ''), $2)
+                        )
+                    ELSE 0
+                END as relevance_score
+            FROM products p
+            WHERE
+                ($1::text IS NULL OR p.name ILIKE $1 OR p.description ILIKE $1
+                 OR similarity(p.name, $2) > $3
+                 OR similarity(COALESCE(p.description, ''), $2) > $3)
+                AND ($4::int2 IS NULL OR p.price >= $4)
+                AND ($5::int2 IS NULL OR p.price <= $5)
+                AND ($6::text IS NULL OR p.product_type = $6)
+                AND ($7::text IS NULL OR p.brand = $7)
+                AND (
+                    CASE
+                        WHEN ARRAY_LENGTH($8::text[], 1) IS NULL THEN true
+                        ELSE EXISTS (
+                            SELECT 1 FROM product_images pi
+                            WHERE pi.product_id = p.id AND pi.color = ANY($8)
+                        )
+                    END
+                )
+                AND (
+                    CASE
+                        WHEN NOT $9::bool AND NOT $10::bool THEN true
+                        WHEN $9::bool AND $10::bool THEN true
+                        WHEN $9::bool THEN p.discount > 0
+                        WHEN $10::bool THEN false
+                        ELSE true
+                    END
+                )
+        )
+        SELECT
+            *,
+            COUNT(*) OVER() as total_count
+        FROM filtered_products
+        ORDER BY
+            relevance_score DESC,
+            CASE WHEN $11 = true THEN price END ASC,
+            CASE WHEN $12 = true THEN price END DESC,
+            created_at DESC
+        LIMIT $13 OFFSET $14
+        "#,
+    )
+    .bind(&search_pattern)
+    .bind(params.query.as_ref())
+    .bind(SIMILARITY_THRESHOLD)
+    .bind(params.price_from)
+    .bind(params.price_to)
+    .bind(params.product_type.as_ref())
+    .bind(params.brand.as_ref())
+    .bind(&colors_array)
+    .bind(has_discount_filter)
+    .bind(has_coins_filter)
+    .bind(sort_price_asc)
+    .bind(sort_price_desc)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
+    let total = results.first().map(|r| r.total_count).unwrap_or(0);
+
+    if results.is_empty() {
+        return Ok(crate::models::ProductSearchResponse {
+            products: Vec::new(),
+            total,
+            limit,
+            offset,
+        });
     }
 
-    if let Some(price_to) = params.price_to {
-        query.push(" AND price <= ");
-        query.push_bind(price_to);
-    }
+    let product_ids: Vec<i32> = results.iter().map(|r| r.product.id).collect();
 
-    // category
-    if let Some(ref product_type) = params.product_type {
-        query.push(" AND product_type = ");
-        query.push_bind(product_type);
-    }
-
-    // brand
-    if let Some(ref brand) = params.brand {
-        query.push(" AND brand = ");
-        query.push_bind(brand);
-    }
-
-    // color
-    if let Some(ref color) = params.color {
-        query.push(" AND EXISTS (SELECT 1 FROM product_images WHERE product_id = products.id AND color = ");
-        query.push_bind(color);
-        query.push(")");
-    }
-
-    // sale type
-    if let Some(ref sale_type) = params.sale_type {
-        match sale_type {
-            SaleType::Discount => {
-                query.push(" AND discount > 0");
-            }
-            SaleType::Coins => {
-                // TODO: add coin_price column
-            }
-        }
-    }
-
-    // sort
-    query.push(" ORDER BY ");
-
-    if has_text_search {
-        if let Some(ref q) = params.query {
-            query.push("GREATEST(similarity(name, ");
-            query.push_bind(q);
-            query.push("), similarity(COALESCE(description, ''), ");
-            query.push_bind(q);
-            query.push(")) DESC");
-
-            match params.sort_by {
-                Some(SortBy::PriceAsc) => {
-                    query.push(", price ASC");
-                }
-                Some(SortBy::PriceDesc) => {
-                    query.push(", price DESC");
-                }
-                None => {
-                    query.push(", created_at DESC");
-                }
-            }
-        }
-    } else {
-        match params.sort_by {
-            Some(SortBy::PriceAsc) => {
-                query.push("price ASC");
-            }
-            Some(SortBy::PriceDesc) => {
-                query.push("price DESC");
-            }
-            None => {
-                query.push("created_at DESC");
-            }
-        }
-    }
-
-    // pagination
-    let limit = params
-        .limit
-        .unwrap_or(DEFAULT_PAGE_SIZE)
-        .min(MAX_PAGE_SIZE);
-
-    query.push(" LIMIT ");
-    query.push_bind(limit);
-
-    if let Some(offset) = params.offset {
-        query.push(" OFFSET ");
-        query.push_bind(offset);
-    }
-
-    let products = query.build_query_as::<Product>().fetch_all(pool).await?;
-
-    if products.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let product_ids: Vec<i32> = products.iter().map(|p| p.id).collect();
-
-    let all_images = sqlx::query_as::<_, ProductImage>(
+    let images = sqlx::query_as::<_, ProductImage>(
         "SELECT product_id, image_uuid, color, is_primary
          FROM product_images
          WHERE product_id = ANY($1)
@@ -169,23 +152,28 @@ pub async fn search_products(pool: &PgPool, params: ProductQuery) -> Result<Vec<
     .fetch_all(pool)
     .await?;
 
-    let mut images_map: HashMap<i32, Vec<ProductImage>> = HashMap::new();
-    for image in all_images {
-        images_map
-            .entry(image.product_id)
-            .or_insert_with(Vec::new)
-            .push(image);
-    }
+    let mut image_groups: HashMap<i32, Vec<ProductImage>> =
+        images
+            .into_iter()
+            .fold(HashMap::with_capacity(product_ids.len()), |mut acc, img| {
+                acc.entry(img.product_id).or_default().push(img);
+                acc
+            });
 
-    let result: Vec<ProductResponse> = products
+    let products = results
         .into_iter()
-        .map(|product| {
-            let images = images_map.remove(&product.id).unwrap_or_default();
-            ProductResponse { product, images }
+        .map(|result| ProductResponse {
+            images: image_groups.remove(&result.product.id).unwrap_or_default(),
+            data: result.product,
         })
         .collect();
 
-    Ok(result)
+    Ok(crate::models::ProductSearchResponse {
+        products,
+        total,
+        limit,
+        offset,
+    })
 }
 
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
