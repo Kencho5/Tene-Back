@@ -44,13 +44,88 @@ pub async fn search_products(
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
 
-    let search_pattern = params.query.as_ref().map(|q| format!("%{}%", q));
-    let sort_price_asc = matches!(params.sort_by, Some(SortBy::PriceAsc));
-    let sort_price_desc = matches!(params.sort_by, Some(SortBy::PriceDesc));
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT p.*, "
+    );
 
-    let has_discount_filter = params.sale_type.contains(&SaleType::Discount);
-    let has_coins_filter = params.sale_type.contains(&SaleType::Coins);
-    let colors_array: Vec<&str> = params.color.iter().map(|s| s.as_str()).collect();
+    // calc relevance if there's a search term
+    if let Some(q) = &params.query {
+        query_builder.push("GREATEST(similarity(p.name, ");
+        query_builder.push_bind(q);
+        query_builder.push("), similarity(COALESCE(p.description, ''), ");
+        query_builder.push_bind(q);
+        query_builder.push("))");
+    } else {
+        query_builder.push("0");
+    }
+    query_builder.push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
+
+    if let Some(q) = &params.query {
+        query_builder.push(" AND (p.name ILIKE ");
+        query_builder.push_bind(format!("%{}%", q));
+        query_builder.push(" OR p.description ILIKE ");
+        query_builder.push_bind(format!("%{}%", q));
+        
+        query_builder.push(" OR similarity(p.name, ");
+        query_builder.push_bind(q);
+        query_builder.push(") > ");
+        query_builder.push_bind(SIMILARITY_THRESHOLD);
+        
+        query_builder.push(" OR similarity(COALESCE(p.description, ''), ");
+        query_builder.push_bind(q);
+        query_builder.push(") > ");
+        query_builder.push_bind(SIMILARITY_THRESHOLD);
+        query_builder.push(")");
+    }
+
+    if let Some(min_price) = params.price_from {
+        query_builder.push(" AND p.price >= ");
+        query_builder.push_bind(min_price);
+    }
+    if let Some(max_price) = params.price_to {
+        query_builder.push(" AND p.price <= ");
+        query_builder.push_bind(max_price);
+    }
+
+    if let Some(pt) = &params.product_type {
+        query_builder.push(" AND p.product_type = ");
+        query_builder.push_bind(pt);
+    }
+
+    if let Some(brand) = &params.brand {
+        query_builder.push(" AND p.brand = ");
+        query_builder.push_bind(brand);
+    }
+
+    if !params.color.is_empty() {
+        query_builder.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
+        query_builder.push_bind(&params.color);
+        query_builder.push("))");
+    }
+
+    let has_discount = params.sale_type.contains(&SaleType::Discount);
+    let has_coins = params.sale_type.contains(&SaleType::Coins);
+
+    if has_discount && !has_coins {
+        query_builder.push(" AND p.discount > 0");
+    } else if !has_discount && has_coins {
+        query_builder.push(" AND false"); 
+    }
+
+    query_builder.push(" ORDER BY relevance_score DESC");
+    
+    match params.sort_by {
+        Some(SortBy::PriceAsc) => query_builder.push(", p.price ASC"),
+        Some(SortBy::PriceDesc) => query_builder.push(", p.price DESC"),
+        None => &mut query_builder,
+    };
+
+    query_builder.push(", p.created_at DESC");
+
+    query_builder.push(" LIMIT ");
+    query_builder.push_bind(limit);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
     #[derive(sqlx::FromRow)]
     struct SearchResult {
@@ -59,75 +134,10 @@ pub async fn search_products(
         total_count: i64,
     }
 
-    let results = sqlx::query_as::<_, SearchResult>(
-        r#"
-        WITH filtered_products AS (
-            SELECT
-                p.*,
-                CASE
-                    WHEN $2::text IS NOT NULL THEN
-                        GREATEST(
-                            similarity(p.name, $2),
-                            similarity(COALESCE(p.description, ''), $2)
-                        )
-                    ELSE 0
-                END as relevance_score
-            FROM products p
-            WHERE
-                ($1::text IS NULL OR p.name ILIKE $1 OR p.description ILIKE $1
-                 OR similarity(p.name, $2) > $3
-                 OR similarity(COALESCE(p.description, ''), $2) > $3)
-                AND ($4::int2 IS NULL OR p.price >= $4)
-                AND ($5::int2 IS NULL OR p.price <= $5)
-                AND ($6::text IS NULL OR p.product_type = $6)
-                AND ($7::text IS NULL OR p.brand = $7)
-                AND (
-                    CASE
-                        WHEN ARRAY_LENGTH($8::text[], 1) IS NULL THEN true
-                        ELSE EXISTS (
-                            SELECT 1 FROM product_images pi
-                            WHERE pi.product_id = p.id AND pi.color = ANY($8)
-                        )
-                    END
-                )
-                AND (
-                    CASE
-                        WHEN NOT $9::bool AND NOT $10::bool THEN true
-                        WHEN $9::bool AND $10::bool THEN true
-                        WHEN $9::bool THEN p.discount > 0
-                        WHEN $10::bool THEN false
-                        ELSE true
-                    END
-                )
-        )
-        SELECT
-            *,
-            COUNT(*) OVER() as total_count
-        FROM filtered_products
-        ORDER BY
-            relevance_score DESC,
-            CASE WHEN $11 = true THEN price END ASC,
-            CASE WHEN $12 = true THEN price END DESC,
-            created_at DESC
-        LIMIT $13 OFFSET $14
-        "#,
-    )
-    .bind(&search_pattern)
-    .bind(params.query.as_ref())
-    .bind(SIMILARITY_THRESHOLD)
-    .bind(params.price_from)
-    .bind(params.price_to)
-    .bind(params.product_type.as_ref())
-    .bind(params.brand.as_ref())
-    .bind(&colors_array)
-    .bind(has_discount_filter)
-    .bind(has_coins_filter)
-    .bind(sort_price_asc)
-    .bind(sort_price_desc)
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(pool)
-    .await?;
+    let results = query_builder
+        .build_query_as::<SearchResult>()
+        .fetch_all(pool)
+        .await?;
 
     let total = results.first().map(|r| r.total_count).unwrap_or(0);
 
@@ -140,6 +150,7 @@ pub async fn search_products(
         });
     }
 
+    // fetch images
     let product_ids: Vec<i32> = results.iter().map(|r| r.product.id).collect();
 
     let images = sqlx::query_as::<_, ProductImage>(

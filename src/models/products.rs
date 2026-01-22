@@ -61,13 +61,53 @@ pub struct ProductQuery {
     pub price_to: Option<i16>,
     pub product_type: Option<String>,
     pub brand: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_string_vec")]
     pub color: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_sale_types")]
     pub sale_type: Vec<SaleType>,
     pub sort_by: Option<SortBy>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+}
+
+fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(match s {
+        Some(s) => s
+            .split(',')
+            .map(|x| x.trim().to_string())
+            .filter(|x| !x.is_empty())
+            .collect(),
+        None => Vec::new(),
+    })
+}
+
+fn deserialize_sale_types<'de, D>(deserializer: D) -> Result<Vec<SaleType>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(match s {
+        Some(s) => {
+            let mut types = Vec::new();
+            for part in s.split(',') {
+                let part = part.trim();
+                if part.is_empty() {
+                    continue;
+                }
+                match part {
+                    "discount" => types.push(SaleType::Discount),
+                    "coins" => types.push(SaleType::Coins),
+                    _ => return Err(serde::de::Error::custom(format!("unknown sale type: {}", part))),
+                }
+            }
+            types
+        }
+        None => Vec::new(),
+    })
 }
 
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
