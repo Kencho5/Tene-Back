@@ -33,7 +33,7 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
     Ok(product_images)
 }
 
-const SIMILARITY_THRESHOLD: f64 = 0.3;
+const SIMILARITY_THRESHOLD: f64 = 0.25;
 const DEFAULT_PAGE_SIZE: i64 = 6;
 const MAX_PAGE_SIZE: i64 = 100;
 
@@ -44,11 +44,9 @@ pub async fn search_products(
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
 
-    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-        "SELECT p.*, "
-    );
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.*, ");
 
-    // calc relevance if there's a search term
+    // calc relevance
     if let Some(q) = &params.query {
         query_builder.push("GREATEST(similarity(p.name, ");
         query_builder.push_bind(q);
@@ -58,19 +56,20 @@ pub async fn search_products(
     } else {
         query_builder.push("0");
     }
-    query_builder.push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
+    query_builder
+        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
 
     if let Some(q) = &params.query {
         query_builder.push(" AND (p.name ILIKE ");
         query_builder.push_bind(format!("%{}%", q));
         query_builder.push(" OR p.description ILIKE ");
         query_builder.push_bind(format!("%{}%", q));
-        
+
         query_builder.push(" OR similarity(p.name, ");
         query_builder.push_bind(q);
         query_builder.push(") > ");
         query_builder.push_bind(SIMILARITY_THRESHOLD);
-        
+
         query_builder.push(" OR similarity(COALESCE(p.description, ''), ");
         query_builder.push_bind(q);
         query_builder.push(") > ");
@@ -109,11 +108,11 @@ pub async fn search_products(
     if has_discount && !has_coins {
         query_builder.push(" AND p.discount > 0");
     } else if !has_discount && has_coins {
-        query_builder.push(" AND false"); 
+        query_builder.push(" AND false");
     }
 
     query_builder.push(" ORDER BY relevance_score DESC");
-    
+
     match params.sort_by {
         Some(SortBy::PriceAsc) => query_builder.push(", p.price ASC"),
         Some(SortBy::PriceDesc) => query_builder.push(", p.price DESC"),
