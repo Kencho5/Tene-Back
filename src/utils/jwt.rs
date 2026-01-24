@@ -3,15 +3,17 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 use crate::error::{AppError, Result};
+use crate::models::UserRole;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub email: String,
+    pub role: UserRole,
     pub exp: usize,
 }
 
-pub fn generate_token(user_id: i32, email: &str) -> Result<String> {
+pub fn generate_token(user_id: i32, email: &str, role: UserRole) -> Result<String> {
     let jwt_secret = env::var("JWT_SECRET")
         .map_err(|_| AppError::ConfigError("JWT_SECRET not set".to_string()))?;
 
@@ -23,6 +25,7 @@ pub fn generate_token(user_id: i32, email: &str) -> Result<String> {
     let claims = Claims {
         sub: user_id.to_string(),
         email: email.to_string(),
+        role,
         exp: expiration,
     };
 
