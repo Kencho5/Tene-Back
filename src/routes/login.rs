@@ -28,7 +28,7 @@ pub async fn login_user(
         return Err(AppError::Unauthorized("Invalid email or password".to_string()));
     }
 
-    let token = jwt::generate_token(user.id, &user.email, user.role)?;
+    let token = jwt::generate_token(user.id, &user.email, &user.name, user.role)?;
 
     Ok(Json(AuthResponse { token }))
 }

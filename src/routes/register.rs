@@ -27,7 +27,7 @@ pub async fn register_user(
     let user =
         user_queries::create_user(&state.db, &payload.email, &payload.name, &password_hash).await?;
 
-    let token = jwt::generate_token(user.id, &user.email, user.role)?;
+    let token = jwt::generate_token(user.id, &user.email, &user.name, user.role)?;
 
     Ok(Json(AuthResponse { token }))
 }
