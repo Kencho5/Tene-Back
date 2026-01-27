@@ -56,6 +56,7 @@ pub enum SaleType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProductQuery {
+    pub id: Option<i32>,
     pub query: Option<String>,
     pub price_from: Option<i16>,
     pub price_to: Option<i16>,

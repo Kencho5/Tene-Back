@@ -44,6 +44,41 @@ pub async fn search_products(
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
 
+    // If ID is provided, search only by ID
+    if let Some(id) = params.id {
+        let product = sqlx::query_as::<_, Product>("SELECT * FROM products WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
+
+        return match product {
+            Some(product) => {
+                let images = sqlx::query_as::<_, ProductImage>(
+                    "SELECT product_id, image_uuid, color, is_primary
+                     FROM product_images
+                     WHERE product_id = $1
+                     ORDER BY is_primary DESC, created_at ASC",
+                )
+                .bind(id)
+                .fetch_all(pool)
+                .await?;
+
+                Ok(crate::models::ProductSearchResponse {
+                    products: vec![ProductResponse { data: product, images }],
+                    total: 1,
+                    limit,
+                    offset,
+                })
+            }
+            None => Ok(crate::models::ProductSearchResponse {
+                products: Vec::new(),
+                total: 0,
+                limit,
+                offset,
+            }),
+        };
+    }
+
     let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.*, ");
 
     // calc relevance

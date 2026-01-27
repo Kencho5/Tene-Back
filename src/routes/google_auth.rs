@@ -1,12 +1,12 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use google_oauth::AsyncClient;
 
 use crate::{
+    AppState,
     error::{AppError, Result},
     models::{AuthResponse, GoogleAuthRequest},
     queries::user_queries,
     utils::jwt,
-    AppState,
 };
 
 pub async fn google_auth(
@@ -33,19 +33,20 @@ pub async fn google_auth(
         .as_ref()
         .ok_or_else(|| AppError::BadRequest("Name not provided by Google".to_string()))?;
 
-    let user = if let Some(existing_user) = user_queries::find_by_google_id(&state.db, google_id).await? {
-        existing_user
-    } else if let Some(existing_user) = user_queries::find_by_email(&state.db, email).await? {
-        if existing_user.password.is_some() {
-            return Err(AppError::Conflict(
-                "Email already registered with password. Please login with email/password"
-                    .to_string(),
-            ));
-        }
-        existing_user
-    } else {
-        user_queries::create_google_user(&state.db, email, name, google_id).await?
-    };
+    let user =
+        if let Some(existing_user) = user_queries::find_by_google_id(&state.db, google_id).await? {
+            existing_user
+        } else if let Some(existing_user) = user_queries::find_by_email(&state.db, email).await? {
+            if existing_user.password.is_some() {
+                return Err(AppError::Conflict(
+                    "Email already registered with password. Please login with email/password"
+                        .to_string(),
+                ));
+            }
+            existing_user
+        } else {
+            user_queries::create_google_user(&state.db, email, name, google_id).await?
+        };
 
     let token = jwt::generate_token(user.id, &user.email, &user.name, user.role)?;
 
