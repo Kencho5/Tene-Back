@@ -47,6 +47,16 @@ pub struct ProductRequest {
     pub warranty: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ProductImageUrlRequest {
+    pub images: Vec<ProductImage>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProductImageUrlResponse {
+    pub urls: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProductSearchResponse {
     pub products: Vec<ProductResponse>,
@@ -117,7 +127,12 @@ where
                 match part {
                     "discount" => types.push(SaleType::Discount),
                     "coins" => types.push(SaleType::Coins),
-                    _ => return Err(serde::de::Error::custom(format!("unknown sale type: {}", part))),
+                    _ => {
+                        return Err(serde::de::Error::custom(format!(
+                            "unknown sale type: {}",
+                            part
+                        )));
+                    }
                 }
             }
             types

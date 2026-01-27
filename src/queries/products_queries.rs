@@ -50,7 +50,11 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
     .bind(&req.price)
     .bind(req.discount.unwrap_or_else(|| rust_decimal::Decimal::ZERO))
     .bind(req.quantity.unwrap_or(0))
-    .bind(req.specifications.as_ref().unwrap_or(&serde_json::json!({})))
+    .bind(
+        req.specifications
+            .as_ref()
+            .unwrap_or(&serde_json::json!({})),
+    )
     .bind(&req.product_type)
     .bind(&req.brand)
     .bind(&req.warranty)
@@ -95,6 +99,22 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
     Ok(product)
 }
 
+pub async fn add_product_image(pool: &PgPool, id: i32, image: ProductImage) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO product_images(product_id, image_uuid, color, is_primary) VALUES ($1, $2, $3, $4)
+        "#,
+    )
+    .bind(id)
+    .bind(image.image_uuid)
+    .bind(image.color)
+    .bind(image.is_primary)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(())
+}
+
 const SIMILARITY_THRESHOLD: f64 = 0.25;
 const DEFAULT_PAGE_SIZE: i64 = 6;
 const MAX_PAGE_SIZE: i64 = 100;
@@ -126,7 +146,10 @@ pub async fn search_products(
                 .await?;
 
                 Ok(crate::models::ProductSearchResponse {
-                    products: vec![ProductResponse { data: product, images }],
+                    products: vec![ProductResponse {
+                        data: product,
+                        images,
+                    }],
                     total: 1,
                     limit,
                     offset,

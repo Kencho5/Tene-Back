@@ -1,3 +1,4 @@
+pub use aws_sdk_s3 as s3;
 pub use aws_sdk_sesv2::Client as SesClient;
 use axum::{
     Router,
@@ -12,15 +13,18 @@ use crate::{config, config::AppConfig, database, error::Result, routes};
 #[derive(Clone)]
 pub struct AppState {
     pub db: PgPool,
+    pub s3_client: s3::Client,
     pub ses_client: SesClient,
 }
 
 pub async fn build(config: &AppConfig) -> Result<Router> {
     let pool = database::create_pool(&config.database).await?;
     let ses_client = config::load_ses_client().await?;
+    let s3_client = config::load_s3_client().await?;
 
     let state = AppState {
         db: pool,
+        s3_client,
         ses_client,
     };
     let allowed_origins: Vec<HeaderValue> = config

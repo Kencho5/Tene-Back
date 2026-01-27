@@ -6,8 +6,12 @@ use axum::{
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{ProductFacets, ProductQuery, ProductRequest, ProductResponse, ProductSearchResponse},
+    models::{
+        ProductFacets, ProductImageUrlRequest, ProductImageUrlResponse, ProductQuery,
+        ProductRequest, ProductResponse, ProductSearchResponse,
+    },
     queries::products_queries,
+    services::image_url_service::put_object_url,
 };
 
 pub async fn search_product(
@@ -96,4 +100,29 @@ pub async fn update_product(
         data: product,
         images,
     }))
+}
+
+pub async fn generate_product_urls(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<ProductImageUrlRequest>,
+) -> Result<Json<ProductImageUrlResponse>> {
+    let mut urls = Vec::new();
+
+    for image in payload.images {
+        let presigned_url = put_object_url(
+            &state.s3_client,
+            "tene-assets",
+            format!("products/{}/{}.jpg", id, image.image_uuid).as_str(),
+            60,
+        )
+        .await
+        .map_err(|e| AppError::InternalError(e.to_string()))?;
+
+        urls.push(presigned_url);
+
+        products_queries::add_product_image(&state.db, id, image).await?;
+    }
+
+    Ok(Json(ProductImageUrlResponse { urls }))
 }

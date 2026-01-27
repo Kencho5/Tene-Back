@@ -51,5 +51,9 @@ fn admin_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/products", post(products::create_product))
         .route("/admin/products/{id}", put(products::update_product))
+        .route(
+            "/admin/products/{id}/images",
+            put(products::generate_product_urls),
+        )
         .layer(middleware::from_fn(auth_middleware))
 }
