@@ -20,6 +20,7 @@ pub fn create_router() -> Router<AppState> {
         .nest("/auth", auth_routes())
         .merge(products_routes())
         .merge(user_routes())
+        .merge(admin_routes())
 }
 
 fn auth_routes() -> Router<AppState> {
@@ -43,5 +44,12 @@ fn user_routes() -> Router<AppState> {
         .route("/addresses", get(user_addresses::get_address))
         .route("/addresses", post(user_addresses::add_address))
         .route("/addresses/{address_id}", put(user_addresses::edit_address))
+        .layer(middleware::from_fn(auth_middleware))
+}
+
+fn admin_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/products", post(products::create_product))
+        .route("/admin/products/{id}", put(products::update_product))
         .layer(middleware::from_fn(auth_middleware))
 }

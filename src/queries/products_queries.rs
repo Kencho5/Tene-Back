@@ -5,8 +5,8 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        FacetValue, Product, ProductFacets, ProductImage, ProductQuery, ProductResponse, SaleType,
-        SortBy,
+        FacetValue, Product, ProductFacets, ProductImage, ProductQuery, ProductRequest,
+        ProductResponse, SaleType, SortBy,
     },
 };
 
@@ -31,6 +31,68 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
     .await?;
 
     Ok(product_images)
+}
+
+pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Product> {
+    let product = sqlx::query_as::<_, Product>(
+        r#"
+        INSERT INTO products (
+            id, name, description, price, discount, quantity,
+            specifications, product_type, brand, warranty
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *
+        "#,
+    )
+    .bind(req.id)
+    .bind(&req.name)
+    .bind(&req.description)
+    .bind(&req.price)
+    .bind(req.discount.unwrap_or_else(|| rust_decimal::Decimal::ZERO))
+    .bind(req.quantity.unwrap_or(0))
+    .bind(req.specifications.as_ref().unwrap_or(&serde_json::json!({})))
+    .bind(&req.product_type)
+    .bind(&req.brand)
+    .bind(&req.warranty)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(product)
+}
+
+pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Result<Product> {
+    let product = sqlx::query_as::<_, Product>(
+        r#"
+        UPDATE products
+        SET
+            name = COALESCE($1, name),
+            description = COALESCE($2, description),
+            price = COALESCE($3, price),
+            discount = COALESCE($4, discount),
+            quantity = COALESCE($5, quantity),
+            specifications = COALESCE($6, specifications),
+            product_type = COALESCE($7, product_type),
+            brand = COALESCE($8, brand),
+            warranty = COALESCE($9, warranty),
+            updated_at = NOW()
+        WHERE id = $10
+        RETURNING *
+        "#,
+    )
+    .bind(&req.name)
+    .bind(&req.description)
+    .bind(&req.price)
+    .bind(&req.discount)
+    .bind(&req.quantity)
+    .bind(&req.specifications)
+    .bind(&req.product_type)
+    .bind(&req.brand)
+    .bind(&req.warranty)
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(product)
 }
 
 const SIMILARITY_THRESHOLD: f64 = 0.25;

@@ -33,6 +33,20 @@ pub struct ProductResponse {
     pub images: Vec<ProductImage>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ProductRequest {
+    pub id: Option<i32>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub price: Option<Decimal>,
+    pub discount: Option<Decimal>,
+    pub quantity: Option<i32>,
+    pub specifications: Option<serde_json::Value>,
+    pub product_type: Option<String>,
+    pub brand: Option<String>,
+    pub warranty: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProductSearchResponse {
     pub products: Vec<ProductResponse>,
