@@ -119,7 +119,13 @@ pub async fn generate_product_urls(
             "image/webp" => "webp",
             _ => "jpg",
         };
-        let key = format!("products/{}/{}.{}", id, image_uuid, extension);
+
+        let env_prefix = match state.environment {
+            crate::config::Environment::Staging => "products-staging",
+            crate::config::Environment::Main => "products-main",
+        };
+
+        let key = format!("{}/{}/{}.{}", env_prefix, id, image_uuid, extension);
 
         let upload_url = put_object_url(
             &state.s3_client,
@@ -131,7 +137,7 @@ pub async fn generate_product_urls(
         .await
         .map_err(|e| AppError::InternalError(format!("Failed to generate presigned URL: {}", e)))?;
 
-        let public_url = format!("{}/{}", state.cdn_url, key);
+        let public_url = format!("{}/{}", state.assets_url, key);
 
         products_queries::add_product_image(&state.db, id, image_uuid, req.color, req.is_primary)
             .await?;

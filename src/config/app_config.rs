@@ -32,7 +32,7 @@ impl Environment {
 #[derive(Debug, Clone)]
 pub struct S3Config {
     pub bucket: String,
-    pub cdn_url: String,
+    pub assets_url: String,
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +69,9 @@ impl AppConfig {
                 max_body_size: env::var("MAX_BODY_SIZE")
                     .unwrap_or_else(|_| "10485760".to_string())
                     .parse()
-                    .map_err(|_| AppError::ConfigError("Invalid MAX_BODY_SIZE value".to_string()))?,
+                    .map_err(|_| {
+                        AppError::ConfigError("Invalid MAX_BODY_SIZE value".to_string())
+                    })?,
             },
             database: DatabaseConfig {
                 url: env::var("DB_URL")?,
@@ -89,8 +91,8 @@ impl AppConfig {
             s3: S3Config {
                 bucket: env::var("S3_BUCKET")
                     .map_err(|_| AppError::ConfigError("S3_BUCKET not set".to_string()))?,
-                cdn_url: env::var("CDN_URL")
-                    .map_err(|_| AppError::ConfigError("CDN_URL not set".to_string()))?,
+                assets_url: env::var("assets_URL")
+                    .map_err(|_| AppError::ConfigError("assets_URL not set".to_string()))?,
             },
             environment,
         })

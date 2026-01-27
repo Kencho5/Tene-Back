@@ -15,7 +15,8 @@ pub struct AppState {
     pub db: PgPool,
     pub s3_client: s3::Client,
     pub s3_bucket: String,
-    pub cdn_url: String,
+    pub assets_url: String,
+    pub environment: config::Environment,
     pub ses_client: SesClient,
 }
 
@@ -28,7 +29,8 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
         db: pool,
         s3_client,
         s3_bucket: config.s3.bucket.clone(),
-        cdn_url: config.s3.cdn_url.clone(),
+        assets_url: config.s3.assets_url.clone(),
+        environment: config.environment.clone(),
         ses_client,
     };
     let allowed_origins: Vec<HeaderValue> = config
