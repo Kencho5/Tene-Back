@@ -14,6 +14,8 @@ use crate::{config, config::AppConfig, database, error::Result, routes};
 pub struct AppState {
     pub db: PgPool,
     pub s3_client: s3::Client,
+    pub s3_bucket: String,
+    pub cdn_url: String,
     pub ses_client: SesClient,
 }
 
@@ -25,6 +27,8 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
     let state = AppState {
         db: pool,
         s3_client,
+        s3_bucket: config.s3.bucket.clone(),
+        cdn_url: config.s3.cdn_url.clone(),
         ses_client,
     };
     let allowed_origins: Vec<HeaderValue> = config

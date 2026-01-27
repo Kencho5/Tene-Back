@@ -3,12 +3,14 @@ use axum::{
     extract::{Path, Query, State},
 };
 
+use uuid::Uuid;
+
 use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        ProductFacets, ProductImageUrlRequest, ProductImageUrlResponse, ProductQuery,
-        ProductRequest, ProductResponse, ProductSearchResponse,
+        ImageUploadUrl, ProductFacets, ProductImageUrlRequest, ProductImageUrlResponse,
+        ProductQuery, ProductRequest, ProductResponse, ProductSearchResponse,
     },
     queries::products_queries,
     services::image_url_service::put_object_url,
@@ -107,22 +109,39 @@ pub async fn generate_product_urls(
     Path(id): Path<i32>,
     Json(payload): Json<ProductImageUrlRequest>,
 ) -> Result<Json<ProductImageUrlResponse>> {
-    let mut urls = Vec::new();
+    let mut responses = Vec::new();
 
-    for image in payload.images {
-        let presigned_url = put_object_url(
+    for req in payload.images {
+        let image_uuid = Uuid::new_v4();
+        let extension = match req.content_type.as_str() {
+            "image/jpeg" | "image/jpg" => "jpg",
+            "image/png" => "png",
+            "image/webp" => "webp",
+            _ => "jpg",
+        };
+        let key = format!("products/{}/{}.{}", id, image_uuid, extension);
+
+        let upload_url = put_object_url(
             &state.s3_client,
-            "tene-assets",
-            format!("products/{}/{}.jpg", id, image.image_uuid).as_str(),
-            60,
+            &state.s3_bucket,
+            &key,
+            &req.content_type,
+            900,
         )
         .await
-        .map_err(|e| AppError::InternalError(e.to_string()))?;
+        .map_err(|e| AppError::InternalError(format!("Failed to generate presigned URL: {}", e)))?;
 
-        urls.push(presigned_url);
+        let public_url = format!("{}/{}", state.cdn_url, key);
 
-        products_queries::add_product_image(&state.db, id, image).await?;
+        products_queries::add_product_image(&state.db, id, image_uuid, req.color, req.is_primary)
+            .await?;
+
+        responses.push(ImageUploadUrl {
+            image_uuid,
+            upload_url,
+            public_url,
+        });
     }
 
-    Ok(Json(ProductImageUrlResponse { urls }))
+    Ok(Json(ProductImageUrlResponse { images: responses }))
 }

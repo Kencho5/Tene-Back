@@ -6,6 +6,33 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub cors: CorsConfig,
+    pub s3: S3Config,
+    pub environment: Environment,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Environment {
+    Staging,
+    Main,
+}
+
+impl Environment {
+    pub fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "staging" => Ok(Environment::Staging),
+            "main" => Ok(Environment::Main),
+            _ => Err(AppError::ConfigError(format!(
+                "Invalid environment: {}. Must be 'staging' or 'main'",
+                s
+            ))),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct S3Config {
+    pub bucket: String,
+    pub cdn_url: String,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +55,10 @@ pub struct CorsConfig {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self> {
+        let environment = Environment::from_str(
+            &env::var("ENVIRONMENT").unwrap_or_else(|_| "staging".to_string()),
+        )?;
+
         Ok(Self {
             server: ServerConfig {
                 host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
@@ -55,6 +86,13 @@ impl AppConfig {
                     .map(|s| s.trim().to_string())
                     .collect(),
             },
+            s3: S3Config {
+                bucket: env::var("S3_BUCKET")
+                    .map_err(|_| AppError::ConfigError("S3_BUCKET not set".to_string()))?,
+                cdn_url: env::var("CDN_URL")
+                    .map_err(|_| AppError::ConfigError("CDN_URL not set".to_string()))?,
+            },
+            environment,
         })
     }
 

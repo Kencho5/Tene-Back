@@ -6,6 +6,7 @@ pub async fn put_object_url(
     client: &s3::Client,
     bucket: &str,
     object: &str,
+    content_type: &str,
     expires_in: u64,
 ) -> Result<String, s3::Error> {
     let expires_in: std::time::Duration = Duration::from_secs(expires_in);
@@ -16,6 +17,7 @@ pub async fn put_object_url(
         .put_object()
         .bucket(bucket)
         .key(object)
+        .content_type(content_type)
         .presigned(expires_in)
         .await?;
 

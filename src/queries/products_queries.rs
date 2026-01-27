@@ -99,17 +99,24 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
     Ok(product)
 }
 
-pub async fn add_product_image(pool: &PgPool, id: i32, image: ProductImage) -> Result<()> {
+pub async fn add_product_image(
+    pool: &PgPool,
+    product_id: i32,
+    image_uuid: uuid::Uuid,
+    color: Option<String>,
+    is_primary: bool,
+) -> Result<()> {
     sqlx::query(
         r#"
-        INSERT INTO product_images(product_id, image_uuid, color, is_primary) VALUES ($1, $2, $3, $4)
+        INSERT INTO product_images(product_id, image_uuid, color, is_primary)
+        VALUES ($1, $2, $3, $4)
         "#,
     )
-    .bind(id)
-    .bind(image.image_uuid)
-    .bind(image.color)
-    .bind(image.is_primary)
-    .fetch_one(pool)
+    .bind(product_id)
+    .bind(image_uuid)
+    .bind(color)
+    .bind(is_primary)
+    .execute(pool)
     .await?;
 
     Ok(())
