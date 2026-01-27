@@ -91,8 +91,8 @@ impl AppConfig {
             s3: S3Config {
                 bucket: env::var("S3_BUCKET")
                     .map_err(|_| AppError::ConfigError("S3_BUCKET not set".to_string()))?,
-                assets_url: env::var("assets_URL")
-                    .map_err(|_| AppError::ConfigError("assets_URL not set".to_string()))?,
+                assets_url: env::var("ASSETS_URL")
+                    .map_err(|_| AppError::ConfigError("ASSETS_URL not set".to_string()))?,
             },
             environment,
         })
