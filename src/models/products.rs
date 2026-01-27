@@ -14,6 +14,7 @@ pub struct Product {
     pub specifications: serde_json::Value,
     pub product_type: String,
     pub brand: Option<String>,
+    pub warranty: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
