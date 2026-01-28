@@ -15,6 +15,7 @@ pub enum AppError {
     BadRequest(String),
     Conflict(String),
     Unauthorized(String),
+    Forbidden(String),
 }
 
 impl fmt::Display for AppError {
@@ -27,6 +28,7 @@ impl fmt::Display for AppError {
             AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
             AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
+            AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
         }
     }
 }
@@ -67,6 +69,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
             AppError::Conflict(ref msg) => (StatusCode::CONFLICT, msg.as_str()),
             AppError::Unauthorized(ref msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
+            AppError::Forbidden(ref msg) => (StatusCode::FORBIDDEN, msg.as_str()),
         };
 
         let body = Json(json!({
