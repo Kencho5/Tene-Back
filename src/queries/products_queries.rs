@@ -105,17 +105,19 @@ pub async fn add_product_image(
     image_uuid: uuid::Uuid,
     color: Option<String>,
     is_primary: bool,
+    extension: &str,
 ) -> Result<()> {
     sqlx::query(
         r#"
-        INSERT INTO product_images(product_id, image_uuid, color, is_primary)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO product_images(product_id, image_uuid, color, is_primary, extension)
+        VALUES ($1, $2, $3, $4, $5)
         "#,
     )
     .bind(product_id)
     .bind(image_uuid)
     .bind(color)
     .bind(is_primary)
+    .bind(extension)
     .execute(pool)
     .await?;
 

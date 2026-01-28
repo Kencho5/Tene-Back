@@ -10,12 +10,12 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        ImageMetadataUpdate, ImageUploadUrl, ProductFacets, ProductImage,
-        ProductImageUrlRequest, ProductImageUrlResponse, ProductQuery, ProductRequest,
-        ProductResponse, ProductSearchResponse,
+        ImageMetadataUpdate, ImageUploadUrl, ProductFacets, ProductImage, ProductImageUrlRequest,
+        ProductImageUrlResponse, ProductQuery, ProductRequest, ProductResponse,
+        ProductSearchResponse,
     },
     queries::products_queries,
-    services::image_url_service::{delete_objects_by_prefix, put_object_url},
+    services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
 
 pub async fn search_product(
@@ -165,8 +165,15 @@ pub async fn generate_product_urls(
 
         let public_url = format!("{}/{}", state.assets_url, key);
 
-        products_queries::add_product_image(&state.db, id, image_uuid, req.color, req.is_primary)
-            .await?;
+        products_queries::add_product_image(
+            &state.db,
+            id,
+            image_uuid,
+            req.color,
+            req.is_primary,
+            extension,
+        )
+        .await?;
 
         responses.push(ImageUploadUrl {
             image_uuid,
@@ -182,7 +189,7 @@ pub async fn delete_product_image(
     State(state): State<AppState>,
     Path((product_id, image_uuid)): Path<(i32, Uuid)>,
 ) -> Result<StatusCode> {
-    products_queries::delete_product_image(&state.db, product_id, image_uuid)
+    let deleted_image = products_queries::delete_product_image(&state.db, product_id, image_uuid)
         .await?
         .ok_or_else(|| {
             AppError::NotFound(format!(
@@ -196,9 +203,12 @@ pub async fn delete_product_image(
         crate::config::Environment::Main => "products-main",
     };
 
-    let prefix = format!("{}/{}/{}", env_prefix, product_id, image_uuid);
+    let key = format!(
+        "{}/{}/{}.{}",
+        env_prefix, product_id, deleted_image.image_uuid, deleted_image.extension
+    );
 
-    delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &prefix)
+    delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
         .map_err(|e| AppError::InternalError(format!("Failed to delete image from S3: {}", e)))?;
 

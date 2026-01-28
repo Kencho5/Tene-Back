@@ -24,6 +24,21 @@ pub async fn put_object_url(
     Ok(presigned_request.uri().into())
 }
 
+pub async fn delete_single_object(
+    client: &s3::Client,
+    bucket: &str,
+    key: &str,
+) -> Result<(), s3::Error> {
+    client
+        .delete_object()
+        .bucket(bucket)
+        .key(key)
+        .send()
+        .await?;
+
+    Ok(())
+}
+
 pub async fn delete_objects_by_prefix(
     client: &s3::Client,
     bucket: &str,

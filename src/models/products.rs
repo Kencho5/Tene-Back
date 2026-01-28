@@ -25,6 +25,7 @@ pub struct ProductImage {
     pub image_uuid: Uuid,
     pub color: Option<String>,
     pub is_primary: bool,
+    pub extension: String,
 }
 
 #[derive(Debug, Serialize)]
