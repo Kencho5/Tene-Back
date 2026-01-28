@@ -8,7 +8,7 @@ mod user_addresses;
 
 use axum::{
     Router, middleware,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
 };
 
 use crate::{AppState, middleware::auth_middleware};
@@ -55,6 +55,14 @@ fn admin_routes() -> Router<AppState> {
         .route(
             "/admin/products/{id}/images",
             put(products::generate_product_urls),
+        )
+        .route(
+            "/admin/products/{id}/images/{image_uuid}",
+            delete(products::delete_product_image),
+        )
+        .route(
+            "/admin/products/{id}/images/{image_uuid}",
+            patch(products::update_product_image_metadata),
         )
         .layer(middleware::from_fn(auth_middleware))
 }

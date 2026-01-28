@@ -373,3 +373,46 @@ pub async fn delete_product(pool: &PgPool, id: i32) -> Result<u64> {
 
     Ok(result.rows_affected())
 }
+
+pub async fn delete_product_image(
+    pool: &PgPool,
+    product_id: i32,
+    image_uuid: uuid::Uuid,
+) -> Result<Option<ProductImage>> {
+    let deleted_image = sqlx::query_as::<_, ProductImage>(
+        "DELETE FROM product_images WHERE product_id = $1 AND image_uuid = $2 RETURNING *",
+    )
+    .bind(product_id)
+    .bind(image_uuid)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(deleted_image)
+}
+
+pub async fn update_product_image_metadata(
+    pool: &PgPool,
+    product_id: i32,
+    image_uuid: uuid::Uuid,
+    color: Option<String>,
+    is_primary: Option<bool>,
+) -> Result<Option<ProductImage>> {
+    let updated_image = sqlx::query_as::<_, ProductImage>(
+        r#"
+        UPDATE product_images
+        SET
+            color = COALESCE($3, color),
+            is_primary = COALESCE($4, is_primary)
+        WHERE product_id = $1 AND image_uuid = $2
+        RETURNING *
+        "#,
+    )
+    .bind(product_id)
+    .bind(image_uuid)
+    .bind(color)
+    .bind(is_primary)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(updated_image)
+}

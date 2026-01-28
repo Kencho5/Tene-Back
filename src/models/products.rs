@@ -71,6 +71,12 @@ pub struct ProductImageUrlResponse {
     pub images: Vec<ImageUploadUrl>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ImageMetadataUpdate {
+    pub color: Option<String>,
+    pub is_primary: Option<bool>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProductSearchResponse {
     pub products: Vec<ProductResponse>,

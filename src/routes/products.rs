@@ -10,8 +10,9 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        ImageUploadUrl, ProductFacets, ProductImageUrlRequest, ProductImageUrlResponse,
-        ProductQuery, ProductRequest, ProductResponse, ProductSearchResponse,
+        ImageMetadataUpdate, ImageUploadUrl, ProductFacets, ProductImage,
+        ProductImageUrlRequest, ProductImageUrlResponse, ProductQuery, ProductRequest,
+        ProductResponse, ProductSearchResponse,
     },
     queries::products_queries,
     services::image_url_service::{delete_objects_by_prefix, put_object_url},
@@ -175,4 +176,60 @@ pub async fn generate_product_urls(
     }
 
     Ok(Json(ProductImageUrlResponse { images: responses }))
+}
+
+pub async fn delete_product_image(
+    State(state): State<AppState>,
+    Path((product_id, image_uuid)): Path<(i32, Uuid)>,
+) -> Result<StatusCode> {
+    products_queries::delete_product_image(&state.db, product_id, image_uuid)
+        .await?
+        .ok_or_else(|| {
+            AppError::NotFound(format!(
+                "Image {} not found for product {}",
+                image_uuid, product_id
+            ))
+        })?;
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "products-staging",
+        crate::config::Environment::Main => "products-main",
+    };
+
+    let prefix = format!("{}/{}/{}", env_prefix, product_id, image_uuid);
+
+    delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &prefix)
+        .await
+        .map_err(|e| AppError::InternalError(format!("Failed to delete image from S3: {}", e)))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_product_image_metadata(
+    State(state): State<AppState>,
+    Path((product_id, image_uuid)): Path<(i32, Uuid)>,
+    Json(payload): Json<ImageMetadataUpdate>,
+) -> Result<Json<ProductImage>> {
+    if payload.color.is_none() && payload.is_primary.is_none() {
+        return Err(AppError::BadRequest(
+            "At least one field (color or is_primary) must be provided".to_string(),
+        ));
+    }
+
+    let updated_image = products_queries::update_product_image_metadata(
+        &state.db,
+        product_id,
+        image_uuid,
+        payload.color,
+        payload.is_primary,
+    )
+    .await?
+    .ok_or_else(|| {
+        AppError::NotFound(format!(
+            "Image {} not found for product {}",
+            image_uuid, product_id
+        ))
+    })?;
+
+    Ok(Json(updated_image))
 }
