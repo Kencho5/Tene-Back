@@ -3,6 +3,7 @@ use axum::{
     extract::{Path, Query, State},
 };
 
+use http::StatusCode;
 use uuid::Uuid;
 
 use crate::{
@@ -102,6 +103,19 @@ pub async fn update_product(
         data: product,
         images,
     }))
+}
+
+pub async fn delete_product(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<StatusCode> {
+    let rows_affected = products_queries::delete_product(&state.db, id).await?;
+
+    if rows_affected == 0 {
+        return Err(AppError::NotFound("Product not found".to_string()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn generate_product_urls(

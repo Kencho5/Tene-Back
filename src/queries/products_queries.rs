@@ -364,3 +364,12 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
 
     Ok(ProductFacets { brands, colors })
 }
+
+pub async fn delete_product(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM products WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(result.rows_affected())
+}
