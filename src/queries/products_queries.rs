@@ -21,7 +21,7 @@ pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
 
 pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<ProductImage>> {
     let product_images = sqlx::query_as::<_, ProductImage>(
-        "SELECT product_id, image_uuid, color, is_primary
+        "SELECT product_id, image_uuid, color, is_primary, extension
          FROM product_images
          WHERE product_id = $1
          ORDER BY is_primary DESC, created_at ASC",
@@ -145,7 +145,7 @@ pub async fn search_products(
         return match product {
             Some(product) => {
                 let images = sqlx::query_as::<_, ProductImage>(
-                    "SELECT product_id, image_uuid, color, is_primary
+                    "SELECT product_id, image_uuid, color, is_primary, extension
                      FROM product_images
                      WHERE product_id = $1
                      ORDER BY is_primary DESC, created_at ASC",
@@ -282,7 +282,7 @@ pub async fn search_products(
     let product_ids: Vec<i32> = results.iter().map(|r| r.product.id).collect();
 
     let images = sqlx::query_as::<_, ProductImage>(
-        "SELECT product_id, image_uuid, color, is_primary
+        "SELECT product_id, image_uuid, color, is_primary, extension
          FROM product_images
          WHERE product_id = ANY($1)
          ORDER BY product_id, is_primary DESC, created_at ASC",
