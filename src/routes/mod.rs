@@ -11,7 +11,10 @@ use axum::{
     routing::{delete, get, patch, post, put},
 };
 
-use crate::{AppState, middleware::auth_middleware};
+use crate::{
+    AppState,
+    middleware::{admin_middleware, auth_middleware},
+};
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
@@ -64,5 +67,5 @@ fn admin_routes() -> Router<AppState> {
             "/admin/products/{id}/images/{image_uuid}",
             patch(products::update_product_image_metadata),
         )
-        .layer(middleware::from_fn(auth_middleware))
+        .layer(middleware::from_fn(admin_middleware))
 }
