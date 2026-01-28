@@ -14,7 +14,7 @@ use crate::{
         ProductQuery, ProductRequest, ProductResponse, ProductSearchResponse,
     },
     queries::products_queries,
-    services::image_url_service::put_object_url,
+    services::image_url_service::{delete_objects_by_prefix, put_object_url},
 };
 
 pub async fn search_product(
@@ -109,11 +109,22 @@ pub async fn delete_product(
     State(state): State<AppState>,
     Path(id): Path<i32>,
 ) -> Result<StatusCode> {
-    let rows_affected = products_queries::delete_product(&state.db, id).await?;
-
-    if rows_affected == 0 {
+    if products_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound("Product not found".to_string()));
     }
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "products-staging",
+        crate::config::Environment::Main => "products-main",
+    };
+
+    let s3_prefix = format!("{}/{}/", env_prefix, id);
+
+    delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &s3_prefix)
+        .await
+        .map_err(|e| AppError::InternalError(format!("Failed to delete images from S3: {}", e)))?;
+
+    products_queries::delete_product(&state.db, id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
