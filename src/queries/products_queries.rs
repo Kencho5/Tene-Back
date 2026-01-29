@@ -235,7 +235,10 @@ pub async fn search_products(
 }
 
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
-    let mut where_conditions = String::from("WHERE 1=1 AND enabled = true");
+    let mut where_conditions = String::from("WHERE 1=1");
+    if let Some(enabled) = params.enabled {
+        where_conditions.push_str(&format!(" AND enabled = {}", enabled));
+    }
     let mut bindings: Vec<String> = Vec::new();
 
     if let Some(ref q) = params.query {
