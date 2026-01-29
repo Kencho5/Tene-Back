@@ -2,7 +2,10 @@ use sqlx::PgPool;
 
 use crate::{
     error::Result,
-    models::{Product, ProductImage, ProductRequest, UserQuery, UserResponse, UserSearchResponse},
+    models::{
+        Product, ProductImage, ProductRequest, UserQuery, UserRequest, UserResponse,
+        UserSearchResponse,
+    },
 };
 
 pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Product> {
@@ -195,4 +198,27 @@ pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearch
         limit,
         offset,
     })
+}
+
+pub async fn update_user(pool: &PgPool, id: i32, req: &UserRequest) -> Result<UserResponse> {
+    let user = sqlx::query_as::<_, UserResponse>(
+        r#"
+        UPDATE users
+        SET
+            email = COALESCE($1, email),
+            name = COALESCE($2, name),
+            role = COALESCE($3, role),
+            updated_at = NOW()
+        WHERE id = $4
+        RETURNING id, email, name, role, created_at
+        "#,
+    )
+    .bind(&req.email)
+    .bind(&req.name)
+    .bind(&req.role)
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(user)
 }

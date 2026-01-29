@@ -11,9 +11,10 @@ use crate::{
     error::{AppError, Result},
     models::{
         ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
-        ProductImageUrlResponse, ProductRequest, ProductResponse, UserQuery, UserSearchResponse,
+        ProductImageUrlResponse, ProductRequest, ProductResponse, UserQuery, UserRequest,
+        UserResponse, UserSearchResponse,
     },
-    queries::{admin_queries, products_queries},
+    queries::{admin_queries, products_queries, user_queries},
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
 
@@ -220,4 +221,18 @@ pub async fn search_users(
     let response = admin_queries::search_users(&state.db, params).await?;
 
     Ok(Json(response))
+}
+
+pub async fn update_user(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<UserRequest>,
+) -> Result<Json<UserResponse>> {
+    if user_queries::find_by_id(&state.db, id).await?.is_none() {
+        return Err(AppError::NotFound(format!("User with id {} not found", id)));
+    }
+
+    let user = admin_queries::update_user(&state.db, id, &payload).await?;
+
+    Ok(Json(user))
 }

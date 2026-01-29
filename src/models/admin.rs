@@ -48,6 +48,13 @@ pub struct ImageMetadataUpdate {
     pub is_primary: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UserRequest {
+    pub email: Option<String>,
+    pub name: Option<String>,
+    pub role: Option<UserRole>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct UserResponse {
     pub id: i32,

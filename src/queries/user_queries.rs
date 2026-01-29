@@ -23,6 +23,15 @@ pub async fn create_user(
     Ok(user)
 }
 
+pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<User>> {
+    let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+
+    Ok(user)
+}
+
 pub async fn find_by_email(pool: &PgPool, email: &str) -> Result<Option<User>> {
     let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE email = $1")
         .bind(email)
