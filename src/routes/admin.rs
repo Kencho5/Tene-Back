@@ -13,6 +13,7 @@ use crate::{
         ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
         ProductImageUrlResponse, ProductRequest, ProductResponse,
     },
+    queries::admin_queries,
     queries::products_queries,
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
@@ -44,7 +45,7 @@ pub async fn create_product(
         )));
     }
 
-    let product = products_queries::create_product(&state.db, &payload).await?;
+    let product = admin_queries::create_product(&state.db, &payload).await?;
     let images = products_queries::find_images_by_product_id(&state.db, product.id).await?;
 
     Ok(Json(ProductResponse {
@@ -65,7 +66,7 @@ pub async fn update_product(
         )));
     }
 
-    let product = products_queries::update_product(&state.db, id, &payload).await?;
+    let product = admin_queries::update_product(&state.db, id, &payload).await?;
     let images = products_queries::find_images_by_product_id(&state.db, product.id).await?;
 
     Ok(Json(ProductResponse {
@@ -93,7 +94,7 @@ pub async fn delete_product(
         .await
         .map_err(|e| AppError::InternalError(format!("Failed to delete images from S3: {}", e)))?;
 
-    products_queries::delete_product(&state.db, id).await?;
+    admin_queries::delete_product(&state.db, id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -132,7 +133,7 @@ pub async fn generate_product_urls(
 
         let public_url = format!("{}/{}", state.assets_url, key);
 
-        products_queries::add_product_image(
+        admin_queries::add_product_image(
             &state.db,
             id,
             image_uuid,
@@ -156,7 +157,7 @@ pub async fn delete_product_image(
     State(state): State<AppState>,
     Path((product_id, image_uuid)): Path<(i32, Uuid)>,
 ) -> Result<StatusCode> {
-    let deleted_image = products_queries::delete_product_image(&state.db, product_id, image_uuid)
+    let deleted_image = admin_queries::delete_product_image(&state.db, product_id, image_uuid)
         .await?
         .ok_or_else(|| {
             AppError::NotFound(format!(
@@ -193,7 +194,7 @@ pub async fn update_product_image_metadata(
         ));
     }
 
-    let updated_image = products_queries::update_product_image_metadata(
+    let updated_image = admin_queries::update_product_image_metadata(
         &state.db,
         product_id,
         image_uuid,
@@ -210,3 +211,5 @@ pub async fn update_product_image_metadata(
 
     Ok(Json(updated_image))
 }
+
+//pub async fn

@@ -53,6 +53,7 @@ fn user_routes() -> Router<AppState> {
 
 fn admin_routes() -> Router<AppState> {
     Router::new()
+        //ADMIN PRODUCTS
         .route("/admin/products", post(admin::create_product))
         .route("/admin/products/{id}", put(admin::update_product))
         .route("/admin/products/{id}", delete(admin::delete_product))
@@ -68,5 +69,6 @@ fn admin_routes() -> Router<AppState> {
             "/admin/products/{id}/images/{image_uuid}",
             patch(admin::update_product_image_metadata),
         )
+        //ADMIN USERS
         .layer(middleware::from_fn(admin_middleware))
 }
