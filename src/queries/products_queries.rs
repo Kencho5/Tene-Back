@@ -43,16 +43,13 @@ pub async fn search_products(
 ) -> Result<crate::models::ProductSearchResponse> {
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
+    let enabled = params.enabled.unwrap_or(true);
 
     // If ID is provided, search only by ID
     if let Some(id) = params.id {
-        let mut query = String::from("SELECT * FROM products WHERE id = $1");
-        if let Some(enabled) = params.enabled {
-            query.push_str(&format!(" AND enabled = {}", enabled));
-        }
-
-        let product = sqlx::query_as::<_, Product>(&query)
+        let product = sqlx::query_as::<_, Product>("SELECT * FROM products WHERE id = $1 AND enabled = $2")
             .bind(id)
+            .bind(enabled)
             .fetch_optional(pool)
             .await?;
 
@@ -102,10 +99,8 @@ pub async fn search_products(
     query_builder
         .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
 
-    if let Some(enabled) = params.enabled {
-        query_builder.push(" AND p.enabled = ");
-        query_builder.push_bind(enabled);
-    }
+    query_builder.push(" AND p.enabled = ");
+    query_builder.push_bind(enabled);
 
     if let Some(q) = &params.query {
         query_builder.push(" AND (p.name ILIKE ");
