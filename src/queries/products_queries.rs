@@ -100,7 +100,12 @@ pub async fn search_products(
         query_builder.push("0");
     }
     query_builder
-        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1 AND p.enabled = true");
+        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
+
+    if let Some(enabled) = params.enabled {
+        query_builder.push(" AND p.enabled = ");
+        query_builder.push_bind(enabled);
+    }
 
     if let Some(q) = &params.query {
         query_builder.push(" AND (p.name ILIKE ");
