@@ -10,11 +10,12 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
-        ProductImageUrlResponse, ProductQuery, ProductRequest, ProductResponse,
-        ProductSearchResponse, UserQuery, UserRequest, UserResponse, UserSearchResponse,
+        Category, CategoryTree, CreateCategoryRequest, ImageMetadataUpdate, ImageUploadUrl,
+        ProductImage, ProductImageUrlRequest, ProductImageUrlResponse, ProductQuery,
+        ProductRequest, ProductResponse, ProductSearchResponse, UpdateCategoryRequest, UserQuery,
+        UserRequest, UserResponse, UserSearchResponse,
     },
-    queries::{admin_queries, products_queries, user_queries},
+    queries::{admin_queries, category_queries, products_queries, user_queries},
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
 
@@ -48,10 +49,12 @@ pub async fn create_product(
 
     let product = admin_queries::create_product(&state.db, &payload).await?;
     let images = products_queries::find_images_by_product_id(&state.db, product.id).await?;
+    let categories = category_queries::get_product_categories(&state.db, product.id).await?;
 
     Ok(Json(ProductResponse {
         data: product,
         images,
+        categories,
     }))
 }
 
@@ -69,10 +72,12 @@ pub async fn update_product(
 
     let product = admin_queries::update_product(&state.db, id, &payload).await?;
     let images = products_queries::find_images_by_product_id(&state.db, product.id).await?;
+    let categories = category_queries::get_product_categories(&state.db, product.id).await?;
 
     Ok(Json(ProductResponse {
         data: product,
         images,
+        categories,
     }))
 }
 
@@ -252,6 +257,165 @@ pub async fn delete_user(State(state): State<AppState>, Path(id): Path<i32>) -> 
     }
 
     admin_queries::delete_user(&state.db, id).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+//CATEGORY ROUTES
+pub async fn get_all_categories_admin(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Category>>> {
+    let categories = category_queries::get_all(&state.db, false).await?;
+    Ok(Json(categories))
+}
+
+pub async fn get_category_tree_admin(State(state): State<AppState>) -> Result<Json<CategoryTree>> {
+    let tree = category_queries::get_category_tree(&state.db, false).await?;
+    Ok(Json(tree))
+}
+
+pub async fn get_category(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<Json<Category>> {
+    let category = category_queries::find_by_id(&state.db, id)
+        .await?
+        .ok_or(AppError::NotFound(format!(
+            "Category with id {} not found",
+            id
+        )))?;
+    Ok(Json(category))
+}
+
+pub async fn create_category(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateCategoryRequest>,
+) -> Result<Json<Category>> {
+    if category_queries::find_by_slug(&state.db, &payload.slug)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::Conflict(format!(
+            "Category with slug '{}' already exists",
+            payload.slug
+        )));
+    }
+
+    if let Some(parent_id) = payload.parent_id {
+        if category_queries::find_by_id(&state.db, parent_id)
+            .await?
+            .is_none()
+        {
+            return Err(AppError::NotFound(format!(
+                "Parent category with id {} not found",
+                parent_id
+            )));
+        }
+    }
+
+    let category = category_queries::create_category(&state.db, payload).await?;
+    Ok(Json(category))
+}
+
+pub async fn update_category(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<UpdateCategoryRequest>,
+) -> Result<Json<Category>> {
+    if category_queries::find_by_id(&state.db, id).await?.is_none() {
+        return Err(AppError::NotFound(format!(
+            "Category with id {} not found",
+            id
+        )));
+    }
+
+    if let Some(ref new_slug) = payload.slug {
+        if let Some(existing) = category_queries::find_by_slug(&state.db, new_slug).await? {
+            if existing.id != id {
+                return Err(AppError::Conflict(format!(
+                    "Another category with slug '{}' already exists",
+                    new_slug
+                )));
+            }
+        }
+    }
+
+    if let Some(parent_id) = payload.parent_id {
+        if parent_id == id {
+            return Err(AppError::BadRequest(
+                "Category cannot be its own parent".to_string(),
+            ));
+        }
+        if category_queries::find_by_id(&state.db, parent_id)
+            .await?
+            .is_none()
+        {
+            return Err(AppError::NotFound(format!(
+                "Parent category with id {} not found",
+                parent_id
+            )));
+        }
+    }
+
+    let category = category_queries::update_category(&state.db, id, payload)
+        .await?
+        .ok_or(AppError::NotFound(format!(
+            "Category with id {} not found",
+            id
+        )))?;
+
+    Ok(Json(category))
+}
+
+pub async fn delete_category(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<StatusCode> {
+    if category_queries::find_by_id(&state.db, id).await?.is_none() {
+        return Err(AppError::NotFound(format!(
+            "Category with id {} not found",
+            id
+        )));
+    }
+
+    category_queries::delete_category(&state.db, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(serde::Deserialize)]
+pub struct AssignCategoriesRequest {
+    pub category_ids: Vec<i32>,
+}
+
+pub async fn assign_categories_to_product(
+    State(state): State<AppState>,
+    Path(product_id): Path<i32>,
+    Json(payload): Json<AssignCategoriesRequest>,
+) -> Result<StatusCode> {
+    if products_queries::find_by_id(&state.db, product_id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "Product with id {} not found",
+            product_id
+        )));
+    }
+
+    for category_id in &payload.category_ids {
+        if category_queries::find_by_id(&state.db, *category_id)
+            .await?
+            .is_none()
+        {
+            return Err(AppError::NotFound(format!(
+                "Category with id {} not found",
+                category_id
+            )));
+        }
+    }
+
+    category_queries::assign_categories_to_product(&state.db, product_id, &payload.category_ids)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

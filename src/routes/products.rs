@@ -31,8 +31,13 @@ pub async fn get_product(
         .ok_or(AppError::NotFound("Product not found".to_string()))?;
 
     let images = products_queries::find_images_by_product_id(&state.db, id).await?;
+    let categories = crate::queries::category_queries::get_product_categories(&state.db, id).await?;
 
-    Ok(Json(ProductResponse { data, images }))
+    Ok(Json(ProductResponse {
+        data,
+        images,
+        categories,
+    }))
 }
 
 pub async fn get_product_facets(

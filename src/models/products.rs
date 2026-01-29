@@ -3,6 +3,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::models::{Category, CategoryFacetValue};
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Product {
     pub id: i32,
@@ -33,6 +35,7 @@ pub struct ProductImage {
 pub struct ProductResponse {
     pub data: Product,
     pub images: Vec<ProductImage>,
+    pub categories: Vec<Category>,
 }
 
 #[derive(Debug, Serialize)]
@@ -69,6 +72,8 @@ pub struct ProductQuery {
     pub color: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_sale_types")]
     pub sale_type: Vec<SaleType>,
+    #[serde(default, deserialize_with = "deserialize_i32_vec")]
+    pub category_id: Vec<i32>,
     pub sort_by: Option<SortBy>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -120,6 +125,22 @@ where
     })
 }
 
+fn deserialize_i32_vec<'de, D>(deserializer: D) -> Result<Vec<i32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(match s {
+        Some(s) => s
+            .split(',')
+            .map(|x| x.trim())
+            .filter(|x| !x.is_empty())
+            .filter_map(|x| x.parse::<i32>().ok())
+            .collect(),
+        None => Vec::new(),
+    })
+}
+
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct FacetValue {
     pub value: String,
@@ -130,4 +151,5 @@ pub struct FacetValue {
 pub struct ProductFacets {
     pub brands: Vec<FacetValue>,
     pub colors: Vec<FacetValue>,
+    pub categories: Vec<CategoryFacetValue>,
 }

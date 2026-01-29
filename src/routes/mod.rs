@@ -1,4 +1,5 @@
 mod admin;
+mod categories;
 mod google_auth;
 mod health;
 mod login;
@@ -23,6 +24,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/health/ready", get(health::readiness_check))
         .nest("/auth", auth_routes())
         .merge(products_routes())
+        .merge(categories_routes())
         .merge(user_routes())
         .merge(admin_routes())
 }
@@ -41,6 +43,12 @@ fn products_routes() -> Router<AppState> {
         .route("/products", get(products::search_product))
         .route("/products/facets", get(products::get_product_facets))
         .route("/products/{id}", get(products::get_product))
+}
+
+fn categories_routes() -> Router<AppState> {
+    Router::new()
+        .route("/categories", get(categories::get_all_categories))
+        .route("/categories/tree", get(categories::get_category_tree))
 }
 
 fn user_routes() -> Router<AppState> {
@@ -70,6 +78,17 @@ fn admin_routes() -> Router<AppState> {
             "/admin/products/{id}/images/{image_uuid}",
             patch(admin::update_product_image_metadata),
         )
+        .route(
+            "/admin/products/{id}/categories",
+            put(admin::assign_categories_to_product),
+        )
+        //ADMIN CATEGORIES
+        .route("/admin/categories", get(admin::get_all_categories_admin))
+        .route("/admin/categories/tree", get(admin::get_category_tree_admin))
+        .route("/admin/categories", post(admin::create_category))
+        .route("/admin/categories/{id}", get(admin::get_category))
+        .route("/admin/categories/{id}", put(admin::update_category))
+        .route("/admin/categories/{id}", delete(admin::delete_category))
         //ADMIN USERS
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))

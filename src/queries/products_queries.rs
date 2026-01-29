@@ -5,8 +5,8 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        FacetValue, Product, ProductFacets, ProductImage, ProductQuery, ProductResponse, SaleType,
-        SortBy,
+        Category, CategoryFacetValue, FacetValue, Product, ProductFacets, ProductImage,
+        ProductQuery, ProductResponse, SaleType, SortBy,
     },
 };
 
@@ -68,10 +68,21 @@ pub async fn search_products(
                 .fetch_all(pool)
                 .await?;
 
+                let categories = sqlx::query_as::<_, Category>(
+                    "SELECT c.* FROM categories c
+                     INNER JOIN product_categories pc ON c.id = pc.category_id
+                     WHERE pc.product_id = $1
+                     ORDER BY c.display_order ASC, c.name ASC",
+                )
+                .bind(id)
+                .fetch_all(pool)
+                .await?;
+
                 Ok(crate::models::ProductSearchResponse {
                     products: vec![ProductResponse {
                         data: product,
                         images,
+                        categories,
                     }],
                     total: 1,
                     limit,
@@ -150,6 +161,12 @@ pub async fn search_products(
         query_builder.push("))");
     }
 
+    if !params.category_id.is_empty() {
+        query_builder.push(" AND EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = p.id AND pc.category_id = ANY(");
+        query_builder.push_bind(&params.category_id);
+        query_builder.push("))");
+    }
+
     let has_discount = params.sale_type.contains(&SaleType::Discount);
     let has_coins = params.sale_type.contains(&SaleType::Coins);
 
@@ -218,10 +235,40 @@ pub async fn search_products(
                 acc
             });
 
+    // fetch categories
+    #[derive(sqlx::FromRow)]
+    struct ProductCategoryRow {
+        product_id: i32,
+        #[sqlx(flatten)]
+        category: Category,
+    }
+
+    let categories = sqlx::query_as::<_, ProductCategoryRow>(
+        "SELECT pc.product_id, c.*
+         FROM product_categories pc
+         INNER JOIN categories c ON pc.category_id = c.id
+         WHERE pc.product_id = ANY($1)
+         ORDER BY pc.product_id, c.display_order ASC, c.name ASC",
+    )
+    .bind(&product_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut category_groups: HashMap<i32, Vec<Category>> = categories.into_iter().fold(
+        HashMap::with_capacity(product_ids.len()),
+        |mut acc, row| {
+            acc.entry(row.product_id).or_default().push(row.category);
+            acc
+        },
+    );
+
     let products = results
         .into_iter()
         .map(|result| ProductResponse {
             images: image_groups.remove(&result.product.id).unwrap_or_default(),
+            categories: category_groups
+                .remove(&result.product.id)
+                .unwrap_or_default(),
             data: result.product,
         })
         .collect();
@@ -275,16 +322,39 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         where_conditions
     );
 
+    let categories_query = format!(
+        "SELECT
+            c.id,
+            c.name,
+            COUNT(DISTINCT p.id)::bigint as count
+         FROM products p
+         JOIN product_categories pc ON p.id = pc.product_id
+         JOIN categories c ON pc.category_id = c.id
+         {}
+         AND c.enabled = true
+         GROUP BY c.id, c.name
+         ORDER BY c.display_order ASC, c.name ASC
+         LIMIT 100",
+        where_conditions
+    );
+
     let mut brands_q = sqlx::query_as::<_, FacetValue>(&brands_query);
     let mut colors_q = sqlx::query_as::<_, FacetValue>(&colors_query);
+    let mut categories_q = sqlx::query_as::<_, CategoryFacetValue>(&categories_query);
 
     for binding in &bindings {
         brands_q = brands_q.bind(binding);
         colors_q = colors_q.bind(binding);
+        categories_q = categories_q.bind(binding);
     }
 
     let brands = brands_q.fetch_all(pool).await?;
     let colors = colors_q.fetch_all(pool).await?;
+    let categories = categories_q.fetch_all(pool).await?;
 
-    Ok(ProductFacets { brands, colors })
+    Ok(ProductFacets {
+        brands,
+        colors,
+        categories,
+    })
 }
