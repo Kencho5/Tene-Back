@@ -172,6 +172,8 @@ pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearch
         query_builder.push_bind(format!("%{}%", email));
     }
 
+    query_builder.push(" ORDER BY created_at DESC");
+
     query_builder.push(" LIMIT ");
     query_builder.push_bind(limit);
     query_builder.push(" OFFSET ");
@@ -221,4 +223,13 @@ pub async fn update_user(pool: &PgPool, id: i32, req: &UserRequest) -> Result<Us
     .await?;
 
     Ok(user)
+}
+
+pub async fn delete_user(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(result.rows_affected())
 }

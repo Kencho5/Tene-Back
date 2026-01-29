@@ -236,3 +236,13 @@ pub async fn update_user(
 
     Ok(Json(user))
 }
+
+pub async fn delete_user(State(state): State<AppState>, Path(id): Path<i32>) -> Result<StatusCode> {
+    if user_queries::find_by_id(&state.db, id).await?.is_none() {
+        return Err(AppError::NotFound(format!("User with id {} not found", id)));
+    }
+
+    admin_queries::delete_user(&state.db, id).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
