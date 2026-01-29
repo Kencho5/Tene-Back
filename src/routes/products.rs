@@ -12,8 +12,11 @@ use crate::{
 
 pub async fn search_product(
     State(state): State<AppState>,
-    Query(params): Query<ProductQuery>,
+    Query(mut params): Query<ProductQuery>,
 ) -> Result<Json<ProductSearchResponse>> {
+    if params.enabled.is_none() {
+        params.enabled = Some(true);
+    }
     let response = products_queries::search_products(&state.db, params).await?;
 
     Ok(Json(response))
@@ -34,8 +37,11 @@ pub async fn get_product(
 
 pub async fn get_product_facets(
     State(state): State<AppState>,
-    Query(params): Query<ProductQuery>,
+    Query(mut params): Query<ProductQuery>,
 ) -> Result<Json<ProductFacets>> {
+    if params.enabled.is_none() {
+        params.enabled = Some(true);
+    }
     let facets = products_queries::get_product_facets(&state.db, params).await?;
 
     Ok(Json(facets))

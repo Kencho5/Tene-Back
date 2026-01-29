@@ -54,6 +54,7 @@ fn user_routes() -> Router<AppState> {
 fn admin_routes() -> Router<AppState> {
     Router::new()
         //ADMIN PRODUCTS
+        .route("/admin/products", get(admin::search_products))
         .route("/admin/products", post(admin::create_product))
         .route("/admin/products/{id}", put(admin::update_product))
         .route("/admin/products/{id}", delete(admin::delete_product))

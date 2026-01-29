@@ -11,8 +11,8 @@ use crate::{
     error::{AppError, Result},
     models::{
         ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
-        ProductImageUrlResponse, ProductRequest, ProductResponse, UserQuery, UserRequest,
-        UserResponse, UserSearchResponse,
+        ProductImageUrlResponse, ProductQuery, ProductRequest, ProductResponse,
+        ProductSearchResponse, UserQuery, UserRequest, UserResponse, UserSearchResponse,
     },
     queries::{admin_queries, products_queries, user_queries},
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
@@ -211,6 +211,15 @@ pub async fn update_product_image_metadata(
     })?;
 
     Ok(Json(updated_image))
+}
+
+pub async fn search_products(
+    State(state): State<AppState>,
+    Query(params): Query<ProductQuery>,
+) -> Result<Json<ProductSearchResponse>> {
+    let response = products_queries::search_products(&state.db, params).await?;
+
+    Ok(Json(response))
 }
 
 //USER ROUTES
