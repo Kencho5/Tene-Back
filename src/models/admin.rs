@@ -1,8 +1,8 @@
+use crate::models::user::UserRole;
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-// Admin Product Management
 
 #[derive(Debug, Deserialize)]
 pub struct ProductRequest {
@@ -17,8 +17,6 @@ pub struct ProductRequest {
     pub brand: Option<String>,
     pub warranty: Option<String>,
 }
-
-// Admin Image Management
 
 #[derive(Debug, Deserialize)]
 pub struct ImageUploadRequest {
@@ -48,4 +46,29 @@ pub struct ProductImageUrlResponse {
 pub struct ImageMetadataUpdate {
     pub color: Option<String>,
     pub is_primary: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct UserResponse {
+    pub id: i32,
+    pub email: String,
+    pub name: String,
+    pub role: UserRole,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserQuery {
+    pub id: Option<i32>,
+    pub email: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UserSearchResponse {
+    pub users: Vec<UserResponse>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
 }

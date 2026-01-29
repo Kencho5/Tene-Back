@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 
 use http::StatusCode;
@@ -11,13 +11,13 @@ use crate::{
     error::{AppError, Result},
     models::{
         ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
-        ProductImageUrlResponse, ProductRequest, ProductResponse,
+        ProductImageUrlResponse, ProductRequest, ProductResponse, UserQuery, UserSearchResponse,
     },
-    queries::admin_queries,
-    queries::products_queries,
+    queries::{admin_queries, products_queries},
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
 
+//PRODUCT ROUTES
 pub async fn create_product(
     State(state): State<AppState>,
     Json(payload): Json<ProductRequest>,
@@ -212,4 +212,12 @@ pub async fn update_product_image_metadata(
     Ok(Json(updated_image))
 }
 
-//pub async fn
+//USER ROUTES
+pub async fn search_users(
+    State(state): State<AppState>,
+    Query(params): Query<UserQuery>,
+) -> Result<Json<UserSearchResponse>> {
+    let response = admin_queries::search_users(&state.db, params).await?;
+
+    Ok(Json(response))
+}

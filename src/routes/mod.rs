@@ -70,5 +70,6 @@ fn admin_routes() -> Router<AppState> {
             patch(admin::update_product_image_metadata),
         )
         //ADMIN USERS
+        .route("/admin/users", get(admin::search_users))
         .layer(middleware::from_fn(admin_middleware))
 }

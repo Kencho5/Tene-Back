@@ -2,7 +2,7 @@ use sqlx::PgPool;
 
 use crate::{
     error::Result,
-    models::{Product, ProductImage, ProductRequest},
+    models::{Product, ProductImage, ProductRequest, UserQuery, UserResponse, UserSearchResponse},
 };
 
 pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Product> {
@@ -146,4 +146,53 @@ pub async fn update_product_image_metadata(
     .await?;
 
     Ok(updated_image)
+}
+
+const DEFAULT_PAGE_SIZE: i64 = 6;
+const MAX_PAGE_SIZE: i64 = 100;
+
+pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearchResponse> {
+    let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+    let offset = params.offset.unwrap_or(0);
+
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT id, email, name, role, created_at, COUNT(*) OVER() as total_count FROM users WHERE 1=1",
+    );
+
+    if let Some(id) = params.id {
+        query_builder.push(" AND id = ");
+        query_builder.push_bind(id);
+    }
+
+    if let Some(ref email) = params.email {
+        query_builder.push(" AND email ILIKE ");
+        query_builder.push_bind(format!("%{}%", email));
+    }
+
+    query_builder.push(" LIMIT ");
+    query_builder.push_bind(limit);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
+
+    #[derive(sqlx::FromRow)]
+    struct SearchResult {
+        #[sqlx(flatten)]
+        user: UserResponse,
+        total_count: i64,
+    }
+
+    let results = query_builder
+        .build_query_as::<SearchResult>()
+        .fetch_all(pool)
+        .await?;
+
+    let total = results.first().map(|r| r.total_count).unwrap_or(0);
+    let users = results.into_iter().map(|r| r.user).collect();
+
+    Ok(UserSearchResponse {
+        users,
+        total,
+        limit,
+        offset,
+    })
 }
