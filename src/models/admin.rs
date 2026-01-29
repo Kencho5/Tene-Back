@@ -16,6 +16,7 @@ pub struct ProductRequest {
     pub product_type: Option<String>,
     pub brand: Option<String>,
     pub warranty: Option<String>,
+    pub enabled: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

@@ -46,7 +46,12 @@ pub async fn search_products(
 
     // If ID is provided, search only by ID
     if let Some(id) = params.id {
-        let product = sqlx::query_as::<_, Product>("SELECT * FROM products WHERE id = $1")
+        let mut query = String::from("SELECT * FROM products WHERE id = $1");
+        if let Some(enabled) = params.enabled {
+            query.push_str(&format!(" AND enabled = {}", enabled));
+        }
+
+        let product = sqlx::query_as::<_, Product>(&query)
             .bind(id)
             .fetch_optional(pool)
             .await?;
@@ -95,7 +100,7 @@ pub async fn search_products(
         query_builder.push("0");
     }
     query_builder
-        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
+        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1 AND p.enabled = true");
 
     if let Some(q) = &params.query {
         query_builder.push(" AND (p.name ILIKE ");
@@ -225,7 +230,7 @@ pub async fn search_products(
 }
 
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
-    let mut where_conditions = String::from("WHERE 1=1");
+    let mut where_conditions = String::from("WHERE 1=1 AND enabled = true");
     let mut bindings: Vec<String> = Vec::new();
 
     if let Some(ref q) = params.query {

@@ -15,6 +15,7 @@ pub struct Product {
     pub product_type: String,
     pub brand: Option<String>,
     pub warranty: Option<String>,
+    pub enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -71,6 +72,7 @@ pub struct ProductQuery {
     pub sort_by: Option<SortBy>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    pub enabled: Option<bool>,
 }
 
 fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
