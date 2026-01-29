@@ -1,3 +1,4 @@
+mod admin;
 mod google_auth;
 mod health;
 mod login;
@@ -52,20 +53,20 @@ fn user_routes() -> Router<AppState> {
 
 fn admin_routes() -> Router<AppState> {
     Router::new()
-        .route("/admin/products", post(products::create_product))
-        .route("/admin/products/{id}", put(products::update_product))
-        .route("/admin/products/{id}", delete(products::delete_product))
+        .route("/admin/products", post(admin::create_product))
+        .route("/admin/products/{id}", put(admin::update_product))
+        .route("/admin/products/{id}", delete(admin::delete_product))
         .route(
             "/admin/products/{id}/images",
-            put(products::generate_product_urls),
+            put(admin::generate_product_urls),
         )
         .route(
             "/admin/products/{id}/images/{image_uuid}",
-            delete(products::delete_product_image),
+            delete(admin::delete_product_image),
         )
         .route(
             "/admin/products/{id}/images/{image_uuid}",
-            patch(products::update_product_image_metadata),
+            patch(admin::update_product_image_metadata),
         )
         .layer(middleware::from_fn(admin_middleware))
 }
