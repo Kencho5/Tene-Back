@@ -13,9 +13,9 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
         r#"
         INSERT INTO products (
             id, name, description, price, discount, quantity,
-            specifications, product_type, brand, warranty, enabled
+            specifications, brand, warranty, enabled
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING *
         "#,
     )
@@ -30,7 +30,6 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
             .as_ref()
             .unwrap_or(&serde_json::json!({})),
     )
-    .bind(&req.product_type)
     .bind(&req.brand)
     .bind(&req.warranty)
     .bind(req.enabled.unwrap_or(true))
@@ -51,12 +50,11 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
             discount = COALESCE($4, discount),
             quantity = COALESCE($5, quantity),
             specifications = COALESCE($6, specifications),
-            product_type = COALESCE($7, product_type),
-            brand = COALESCE($8, brand),
-            warranty = COALESCE($9, warranty),
-            enabled = COALESCE($10, enabled),
+            brand = COALESCE($7, brand),
+            warranty = COALESCE($8, warranty),
+            enabled = COALESCE($9, enabled),
             updated_at = NOW()
-        WHERE id = $11
+        WHERE id = $10
         RETURNING *
         "#,
     )
@@ -66,7 +64,6 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
     .bind(&req.discount)
     .bind(&req.quantity)
     .bind(&req.specifications)
-    .bind(&req.product_type)
     .bind(&req.brand)
     .bind(&req.warranty)
     .bind(&req.enabled)

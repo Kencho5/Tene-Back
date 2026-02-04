@@ -13,7 +13,6 @@ pub struct ProductRequest {
     pub discount: Option<Decimal>,
     pub quantity: Option<i32>,
     pub specifications: Option<serde_json::Value>,
-    pub product_type: Option<String>,
     pub brand: Option<String>,
     pub warranty: Option<String>,
     pub enabled: Option<bool>,

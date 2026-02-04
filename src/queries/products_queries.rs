@@ -145,11 +145,6 @@ pub async fn search_products(
         query_builder.push_bind(max_price);
     }
 
-    if let Some(pt) = &params.product_type {
-        query_builder.push(" AND p.product_type = ");
-        query_builder.push_bind(pt);
-    }
-
     if let Some(brand) = &params.brand {
         query_builder.push(" AND p.brand = ");
         query_builder.push_bind(brand);

@@ -14,7 +14,6 @@ pub struct Product {
     pub discount: Decimal,
     pub quantity: i32,
     pub specifications: serde_json::Value,
-    pub product_type: String,
     pub brand: Option<String>,
     pub warranty: Option<String>,
     pub enabled: bool,
@@ -66,7 +65,6 @@ pub struct ProductQuery {
     pub query: Option<String>,
     pub price_from: Option<i16>,
     pub price_to: Option<i16>,
-    pub product_type: Option<String>,
     pub brand: Option<String>,
     #[serde(default, deserialize_with = "deserialize_string_vec")]
     pub color: Vec<String>,

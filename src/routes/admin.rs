@@ -38,10 +38,6 @@ pub async fn create_product(
         return Err(AppError::BadRequest("price is required".to_string()));
     }
 
-    if payload.product_type.is_none() {
-        return Err(AppError::BadRequest("product_type is required".to_string()));
-    }
-
     if products_queries::find_by_id(&state.db, id).await?.is_some() {
         return Err(AppError::Conflict(format!(
             "Product with id {} already exists",
