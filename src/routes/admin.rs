@@ -10,10 +10,12 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        Category, CategoryTree, CreateCategoryRequest, ImageMetadataUpdate, ImageUploadUrl,
-        ProductImage, ProductImageUrlRequest, ProductImageUrlResponse, ProductQuery,
-        ProductRequest, ProductResponse, ProductSearchResponse, UpdateCategoryRequest, UserQuery,
-        UserRequest, UserResponse, UserSearchResponse,
+        Category, CategoryImageUploadRequest, CategoryImageUploadUrl, CategoryResponse,
+        CategoryResponseWithChildren, CategoryTreeResponse, CreateCategoryRequest,
+        ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
+        ProductImageUrlResponse, ProductQuery, ProductRequest, ProductResponse,
+        ProductSearchResponse, UpdateCategoryRequest, UserQuery, UserRequest, UserResponse,
+        UserSearchResponse,
     },
     queries::{admin_queries, category_queries, products_queries, user_queries},
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
@@ -264,27 +266,122 @@ pub async fn delete_user(State(state): State<AppState>, Path(id): Path<i32>) -> 
 //CATEGORY ROUTES
 pub async fn get_all_categories_admin(
     State(state): State<AppState>,
-) -> Result<Json<Vec<Category>>> {
+) -> Result<Json<Vec<CategoryResponse>>> {
     let categories = category_queries::get_all(&state.db, false).await?;
-    Ok(Json(categories))
+
+    let category_ids: Vec<i32> = categories.iter().map(|c| c.id).collect();
+    let images = category_queries::get_category_images(&state.db, &category_ids).await?;
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "categories-staging",
+        crate::config::Environment::Main => "categories-main",
+    };
+
+    let response: Vec<CategoryResponse> = categories
+        .into_iter()
+        .map(|category| {
+            let image_url = images.get(&category.id).map(|img| {
+                format!(
+                    "{}/{}/{}/{}.{}",
+                    state.assets_url, env_prefix, category.id, img.image_uuid, img.extension
+                )
+            });
+
+            CategoryResponse {
+                category,
+                image_url,
+            }
+        })
+        .collect();
+
+    Ok(Json(response))
 }
 
-pub async fn get_category_tree_admin(State(state): State<AppState>) -> Result<Json<CategoryTree>> {
+pub async fn get_category_tree_admin(
+    State(state): State<AppState>,
+) -> Result<Json<CategoryTreeResponse>> {
     let tree = category_queries::get_category_tree(&state.db, false).await?;
-    Ok(Json(tree))
+
+    // Collect all category IDs from the tree
+    fn collect_ids(nodes: &[crate::models::CategoryWithChildren], ids: &mut Vec<i32>) {
+        for node in nodes {
+            ids.push(node.category.id);
+            collect_ids(&node.children, ids);
+        }
+    }
+
+    let mut category_ids = Vec::new();
+    collect_ids(&tree.categories, &mut category_ids);
+
+    // Fetch all images
+    let images = category_queries::get_category_images(&state.db, &category_ids).await?;
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "categories-staging",
+        crate::config::Environment::Main => "categories-main",
+    };
+
+    // Build image URL helper
+    let build_image_url = |category_id: i32| -> Option<String> {
+        images.get(&category_id).map(|img| {
+            format!(
+                "{}/{}/{}/{}.{}",
+                state.assets_url, env_prefix, category_id, img.image_uuid, img.extension
+            )
+        })
+    };
+
+    // Convert tree to response with image URLs
+    fn build_response_tree(
+        nodes: Vec<crate::models::CategoryWithChildren>,
+        build_url: &dyn Fn(i32) -> Option<String>,
+    ) -> Vec<CategoryResponseWithChildren> {
+        nodes
+            .into_iter()
+            .map(|node| CategoryResponseWithChildren {
+                image_url: build_url(node.category.id),
+                children: build_response_tree(node.children, build_url),
+                category: node.category,
+            })
+            .collect()
+    }
+
+    let response_categories = build_response_tree(tree.categories, &build_image_url);
+
+    Ok(Json(CategoryTreeResponse {
+        categories: response_categories,
+    }))
 }
 
 pub async fn get_category(
     State(state): State<AppState>,
     Path(id): Path<i32>,
-) -> Result<Json<Category>> {
+) -> Result<Json<CategoryResponse>> {
     let category = category_queries::find_by_id(&state.db, id)
         .await?
         .ok_or(AppError::NotFound(format!(
             "Category with id {} not found",
             id
         )))?;
-    Ok(Json(category))
+
+    let image = category_queries::get_category_image(&state.db, id).await?;
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "categories-staging",
+        crate::config::Environment::Main => "categories-main",
+    };
+
+    let image_url = image.map(|img| {
+        format!(
+            "{}/{}/{}/{}.{}",
+            state.assets_url, env_prefix, id, img.image_uuid, img.extension
+        )
+    });
+
+    Ok(Json(CategoryResponse {
+        category,
+        image_url,
+    }))
 }
 
 pub async fn create_category(
@@ -416,6 +513,99 @@ pub async fn assign_categories_to_product(
 
     category_queries::assign_categories_to_product(&state.db, product_id, &payload.category_ids)
         .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn generate_category_image_url(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<CategoryImageUploadRequest>,
+) -> Result<Json<CategoryImageUploadUrl>> {
+    // Check if category exists
+    if category_queries::find_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "Category with id {} not found",
+            id
+        )));
+    }
+
+    let image_uuid = Uuid::new_v4();
+    let extension = match payload.content_type.as_str() {
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/png" => "png",
+        "image/webp" => "webp",
+        _ => "jpg",
+    };
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "categories-staging",
+        crate::config::Environment::Main => "categories-main",
+    };
+
+    let key = format!("{}/{}/{}.{}", env_prefix, id, image_uuid, extension);
+
+    let upload_url = put_object_url(
+        &state.s3_client,
+        &state.s3_bucket,
+        &key,
+        &payload.content_type,
+        900,
+    )
+    .await
+    .map_err(|e| AppError::InternalError(format!("Failed to generate presigned URL: {}", e)))?;
+
+    let public_url = format!("{}/{}", state.assets_url, key);
+
+    category_queries::add_category_image(&state.db, id, image_uuid, extension)
+        .await?;
+
+    Ok(Json(CategoryImageUploadUrl {
+        image_uuid,
+        upload_url,
+        public_url,
+    }))
+}
+
+pub async fn delete_category_image(
+    State(state): State<AppState>,
+    Path((id, image_uuid)): Path<(i32, Uuid)>,
+) -> Result<StatusCode> {
+    // Check if category exists
+    if category_queries::find_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "Category with id {} not found",
+            id
+        )));
+    }
+
+    // Get the image to find its extension
+    let image = category_queries::get_category_image(&state.db, id)
+        .await?
+        .ok_or(AppError::NotFound("Category image not found".to_string()))?;
+
+    if image.image_uuid != image_uuid {
+        return Err(AppError::NotFound("Category image not found".to_string()));
+    }
+
+    let env_prefix = match state.environment {
+        crate::config::Environment::Staging => "categories-staging",
+        crate::config::Environment::Main => "categories-main",
+    };
+
+    let key = format!("{}/{}/{}.{}", env_prefix, id, image_uuid, image.extension);
+
+    delete_single_object(&state.s3_client, &state.s3_bucket, &key)
+        .await
+        .map_err(|e| AppError::InternalError(format!("Failed to delete image from S3: {}", e)))?;
+
+    category_queries::delete_category_image(&state.db, id, image_uuid).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

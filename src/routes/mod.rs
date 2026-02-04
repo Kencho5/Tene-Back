@@ -89,6 +89,14 @@ fn admin_routes() -> Router<AppState> {
         .route("/admin/categories/{id}", get(admin::get_category))
         .route("/admin/categories/{id}", put(admin::update_category))
         .route("/admin/categories/{id}", delete(admin::delete_category))
+        .route(
+            "/admin/categories/{id}/image",
+            put(admin::generate_category_image_url),
+        )
+        .route(
+            "/admin/categories/{id}/image/{image_uuid}",
+            delete(admin::delete_category_image),
+        )
         //ADMIN USERS
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))

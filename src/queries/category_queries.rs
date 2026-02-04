@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use sqlx::PgPool;
 
+use uuid::Uuid;
+
 use crate::{
     error::Result,
     models::{
-        Category, CategoryFacetValue, CategoryTree, CategoryWithChildren, CreateCategoryRequest,
-        UpdateCategoryRequest,
+        Category, CategoryFacetValue, CategoryImage, CategoryTree, CategoryWithChildren,
+        CreateCategoryRequest, UpdateCategoryRequest,
     },
 };
 
@@ -274,4 +276,87 @@ pub async fn get_category_facets(
         .await?;
 
     Ok(facets)
+}
+
+/// Get category image
+pub async fn get_category_image(
+    pool: &PgPool,
+    category_id: i32,
+) -> Result<Option<CategoryImage>> {
+    let image = sqlx::query_as::<_, CategoryImage>(
+        "SELECT * FROM category_images WHERE category_id = $1 LIMIT 1",
+    )
+    .bind(category_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(image)
+}
+
+/// Get category images for multiple categories
+pub async fn get_category_images(
+    pool: &PgPool,
+    category_ids: &[i32],
+) -> Result<HashMap<i32, CategoryImage>> {
+    if category_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let images = sqlx::query_as::<_, CategoryImage>(
+        "SELECT * FROM category_images WHERE category_id = ANY($1)",
+    )
+    .bind(category_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let image_map = images
+        .into_iter()
+        .map(|img| (img.category_id, img))
+        .collect();
+
+    Ok(image_map)
+}
+
+/// Add category image
+pub async fn add_category_image(
+    pool: &PgPool,
+    category_id: i32,
+    image_uuid: Uuid,
+    extension: &str,
+) -> Result<CategoryImage> {
+    // Delete any existing image for this category first
+    sqlx::query("DELETE FROM category_images WHERE category_id = $1")
+        .bind(category_id)
+        .execute(pool)
+        .await?;
+
+    let image = sqlx::query_as::<_, CategoryImage>(
+        "INSERT INTO category_images (category_id, image_uuid, extension)
+         VALUES ($1, $2, $3)
+         RETURNING *",
+    )
+    .bind(category_id)
+    .bind(image_uuid)
+    .bind(extension)
+    .fetch_one(pool)
+    .await?;
+
+    Ok(image)
+}
+
+/// Delete category image
+pub async fn delete_category_image(
+    pool: &PgPool,
+    category_id: i32,
+    image_uuid: Uuid,
+) -> Result<bool> {
+    let result = sqlx::query(
+        "DELETE FROM category_images WHERE category_id = $1 AND image_uuid = $2",
+    )
+    .bind(category_id)
+    .bind(image_uuid)
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
 }

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Category {
@@ -58,4 +59,44 @@ pub struct CategoryFacetValue {
     pub id: i32,
     pub name: String,
     pub count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CategoryImage {
+    pub category_id: i32,
+    pub image_uuid: Uuid,
+    pub extension: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CategoryResponse {
+    #[serde(flatten)]
+    pub category: Category,
+    pub image_url: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CategoryTreeResponse {
+    pub categories: Vec<CategoryResponseWithChildren>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CategoryResponseWithChildren {
+    #[serde(flatten)]
+    pub category: Category,
+    pub image_url: Option<String>,
+    pub children: Vec<CategoryResponseWithChildren>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CategoryImageUploadRequest {
+    pub content_type: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CategoryImageUploadUrl {
+    pub image_uuid: Uuid,
+    pub upload_url: String,
+    pub public_url: String,
 }
