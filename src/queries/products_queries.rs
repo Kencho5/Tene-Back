@@ -283,13 +283,17 @@ pub async fn search_products(
 
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
     let mut where_conditions = String::from("WHERE 1=1");
+    let mut where_conditions_p = String::from("WHERE 1=1");
+
     if let Some(enabled) = params.enabled {
         where_conditions.push_str(&format!(" AND enabled = {}", enabled));
+        where_conditions_p.push_str(&format!(" AND p.enabled = {}", enabled));
     }
     let mut bindings: Vec<String> = Vec::new();
 
     if let Some(ref q) = params.query {
         where_conditions.push_str(" AND (name ILIKE $1 OR description ILIKE $1 OR similarity(name, $1) > 0.3 OR similarity(COALESCE(description, ''), $1) > 0.3)");
+        where_conditions_p.push_str(" AND (p.name ILIKE $1 OR p.description ILIKE $1 OR similarity(p.name, $1) > 0.3 OR similarity(COALESCE(p.description, ''), $1) > 0.3)");
         bindings.push(format!("%{}%", q));
     }
 
@@ -319,7 +323,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
          GROUP BY pi.color
          ORDER BY count DESC
          LIMIT 50",
-        where_conditions
+        where_conditions_p
     );
 
     let categories_query = format!(
@@ -335,7 +339,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
          GROUP BY c.id, c.name
          ORDER BY c.display_order ASC, c.name ASC
          LIMIT 100",
-        where_conditions
+        where_conditions_p
     );
 
     let mut brands_q = sqlx::query_as::<_, FacetValue>(&brands_query);
