@@ -157,9 +157,23 @@ pub async fn search_products(
     }
 
     if !params.category_id.is_empty() {
-        query_builder.push(" AND EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = p.id AND pc.category_id = ANY(");
+        query_builder.push(
+            " AND EXISTS (
+                WITH RECURSIVE category_tree AS (
+                    SELECT id FROM categories WHERE id = ANY("
+        );
         query_builder.push_bind(&params.category_id);
-        query_builder.push("))");
+        query_builder.push(
+            ")
+                    UNION ALL
+                    SELECT c.id FROM categories c
+                    INNER JOIN category_tree ct ON c.parent_id = ct.id
+                )
+                SELECT 1 FROM product_categories pc
+                WHERE pc.product_id = p.id
+                AND pc.category_id IN (SELECT id FROM category_tree)
+            )"
+        );
     }
 
     let has_discount = params.sale_type.contains(&SaleType::Discount);
