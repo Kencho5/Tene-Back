@@ -1,11 +1,11 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 use crate::{
+    AppState,
     error::{AppError, Result},
     models::{AuthResponse, LoginRequest},
     queries::user_queries,
     utils::jwt,
-    AppState,
 };
 
 pub async fn login_user(
@@ -25,7 +25,9 @@ pub async fn login_user(
         .map_err(|e| AppError::InternalError(format!("Password verification failed: {}", e)))?;
 
     if !is_valid {
-        return Err(AppError::Unauthorized("Invalid email or password".to_string()));
+        return Err(AppError::Unauthorized(
+            "Invalid email or password".to_string(),
+        ));
     }
 
     let token = jwt::generate_token(user.id, &user.email, &user.name, user.role)?;

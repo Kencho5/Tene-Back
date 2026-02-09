@@ -116,3 +116,19 @@ pub async fn edit_user_address(
 
     Ok(address)
 }
+
+pub async fn delete_user_address(
+    pool: &PgPool,
+    user_id: i32,
+    address_id: i32,
+) -> Result<Option<UserAddress>> {
+    let address = sqlx::query_as::<_, UserAddress>(
+        "DELETE FROM user_addresses WHERE uesr_id = $1 AND id = $2",
+    )
+    .bind(user_id)
+    .bind(address_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(address)
+}

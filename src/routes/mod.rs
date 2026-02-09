@@ -56,6 +56,10 @@ fn user_routes() -> Router<AppState> {
         .route("/addresses", get(user_addresses::get_address))
         .route("/addresses", post(user_addresses::add_address))
         .route("/addresses/{address_id}", put(user_addresses::edit_address))
+        .route(
+            "/addresses/{address_id}",
+            delete(user_addresses::delete_address),
+        )
         .layer(middleware::from_fn(auth_middleware))
 }
 
@@ -84,7 +88,10 @@ fn admin_routes() -> Router<AppState> {
         )
         //ADMIN CATEGORIES
         .route("/admin/categories", get(admin::get_all_categories_admin))
-        .route("/admin/categories/tree", get(admin::get_category_tree_admin))
+        .route(
+            "/admin/categories/tree",
+            get(admin::get_category_tree_admin),
+        )
         .route("/admin/categories", post(admin::create_category))
         .route("/admin/categories/{id}", get(admin::get_category))
         .route("/admin/categories/{id}", put(admin::update_category))

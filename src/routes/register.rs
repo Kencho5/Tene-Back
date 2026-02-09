@@ -1,11 +1,11 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 use crate::{
+    AppState,
     error::{AppError, Result},
     models::{AuthResponse, RegisterRequest},
     queries::user_queries,
     utils::jwt,
-    AppState,
 };
 
 pub async fn register_user(
@@ -43,7 +43,7 @@ fn validate_registration(payload: &RegisterRequest) -> Result<()> {
 
     if payload.password.len() < 4 {
         return Err(AppError::BadRequest(
-            "Password must be at least 8 characters".to_string(),
+            "Password must be at least 4 characters".to_string(),
         ));
     }
 

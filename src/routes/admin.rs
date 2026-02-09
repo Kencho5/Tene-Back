@@ -9,14 +9,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{
-        Category, CategoryImageUploadRequest, CategoryImageUploadUrl, CategoryResponse,
-        CategoryResponseWithChildren, CategoryTreeResponse, CreateCategoryRequest,
-        ImageMetadataUpdate, ImageUploadUrl, ProductImage, ProductImageUrlRequest,
-        ProductImageUrlResponse, ProductQuery, ProductRequest, ProductResponse,
-        ProductSearchResponse, UpdateCategoryRequest, UserQuery, UserRequest, UserResponse,
-        UserSearchResponse,
-    },
+    models::*,
     queries::{admin_queries, category_queries, products_queries, user_queries},
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
@@ -519,10 +512,7 @@ pub async fn generate_category_image_url(
     Json(payload): Json<CategoryImageUploadRequest>,
 ) -> Result<Json<CategoryImageUploadUrl>> {
     // Check if category exists
-    if category_queries::find_by_id(&state.db, id)
-        .await?
-        .is_none()
-    {
+    if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
             "Category with id {} not found",
             id
@@ -556,8 +546,7 @@ pub async fn generate_category_image_url(
 
     let public_url = format!("{}/{}", state.assets_url, key);
 
-    category_queries::add_category_image(&state.db, id, image_uuid, extension)
-        .await?;
+    category_queries::add_category_image(&state.db, id, image_uuid, extension).await?;
 
     Ok(Json(CategoryImageUploadUrl {
         image_uuid,
@@ -571,10 +560,7 @@ pub async fn delete_category_image(
     Path((id, image_uuid)): Path<(i32, Uuid)>,
 ) -> Result<StatusCode> {
     // Check if category exists
-    if category_queries::find_by_id(&state.db, id)
-        .await?
-        .is_none()
-    {
+    if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
             "Category with id {} not found",
             id

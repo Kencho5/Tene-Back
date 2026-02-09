@@ -7,7 +7,9 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::UserAddress,
-    queries::user_queries::{add_user_address, edit_user_address, get_user_addresses},
+    queries::user_queries::{
+        add_user_address, delete_user_address, edit_user_address, get_user_addresses,
+    },
     utils::{extractors::extract_user_id, jwt::Claims},
 };
 
@@ -43,6 +45,20 @@ pub async fn edit_address(
     let user_id = extract_user_id(&claims)?;
 
     let address = edit_user_address(&state.db, user_id, address_id, payload)
+        .await?
+        .ok_or(AppError::NotFound("Address not found".to_string()))?;
+
+    Ok(Json(address))
+}
+
+pub async fn delete_address(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(address_id): Path<i32>,
+) -> Result<Json<UserAddress>> {
+    let user_id = extract_user_id(&claims)?;
+
+    let address = delete_user_address(&state.db, user_id, address_id)
         .await?
         .ok_or(AppError::NotFound("Address not found".to_string()))?;
 
