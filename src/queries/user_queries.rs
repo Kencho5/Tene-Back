@@ -123,7 +123,7 @@ pub async fn delete_user_address(
     address_id: i32,
 ) -> Result<Option<UserAddress>> {
     let address = sqlx::query_as::<_, UserAddress>(
-        "DELETE FROM user_addresses WHERE uesr_id = $1 AND id = $2",
+        "DELETE FROM user_addresses WHERE user_id = $1 AND id = $2 RETURNING *",
     )
     .bind(user_id)
     .bind(address_id)
