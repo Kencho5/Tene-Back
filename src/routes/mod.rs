@@ -3,6 +3,7 @@ mod categories;
 mod google_auth;
 mod health;
 mod login;
+mod orders;
 mod products;
 mod register;
 mod send_code;
@@ -26,6 +27,8 @@ pub fn create_router() -> Router<AppState> {
         .merge(products_routes())
         .merge(categories_routes())
         .merge(user_routes())
+        .merge(checkout_routes())
+        .route("/payments/callback", post(orders::flitt_callback))
         .merge(admin_routes())
 }
 
@@ -60,6 +63,13 @@ fn user_routes() -> Router<AppState> {
             "/addresses/{address_id}",
             delete(user_addresses::delete_address),
         )
+        .layer(middleware::from_fn(auth_middleware))
+}
+
+fn checkout_routes() -> Router<AppState> {
+    Router::new()
+        .route("/checkout", post(orders::checkout))
+        .route("/orders", get(orders::get_orders))
         .layer(middleware::from_fn(auth_middleware))
 }
 

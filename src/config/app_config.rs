@@ -2,12 +2,20 @@ use crate::error::{AppError, Result};
 use std::env;
 
 #[derive(Debug, Clone)]
+pub struct FlittConfig {
+    pub merchant_id: i32,
+    pub secret_key: String,
+    pub backend_url: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub cors: CorsConfig,
     pub s3: S3Config,
     pub environment: Environment,
+    pub flitt: FlittConfig,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,6 +101,20 @@ impl AppConfig {
                     .map_err(|_| AppError::ConfigError("S3_BUCKET not set".to_string()))?,
                 assets_url: env::var("ASSETS_URL")
                     .map_err(|_| AppError::ConfigError("ASSETS_URL not set".to_string()))?,
+            },
+            flitt: FlittConfig {
+                merchant_id: env::var("FLITT_MERCHANT_ID")
+                    .map_err(|_| AppError::ConfigError("FLITT_MERCHANT_ID not set".to_string()))?
+                    .parse()
+                    .map_err(|_| {
+                        AppError::ConfigError("Invalid FLITT_MERCHANT_ID value".to_string())
+                    })?,
+                secret_key: env::var("FLITT_SECRET_KEY").map_err(|_| {
+                    AppError::ConfigError("FLITT_SECRET_KEY not set".to_string())
+                })?,
+                backend_url: env::var("BACKEND_URL").map_err(|_| {
+                    AppError::ConfigError("BACKEND_URL not set".to_string())
+                })?,
             },
             environment,
         })

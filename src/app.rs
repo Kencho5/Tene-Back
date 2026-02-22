@@ -18,6 +18,10 @@ pub struct AppState {
     pub assets_url: String,
     pub environment: config::Environment,
     pub ses_client: SesClient,
+    pub flitt_merchant_id: i32,
+    pub flitt_secret_key: String,
+    pub frontend_url: String,
+    pub backend_url: String,
 }
 
 pub async fn build(config: &AppConfig) -> Result<Router> {
@@ -32,6 +36,10 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
         assets_url: config.s3.assets_url.clone(),
         environment: config.environment.clone(),
         ses_client,
+        flitt_merchant_id: config.flitt.merchant_id,
+        flitt_secret_key: config.flitt.secret_key.clone(),
+        frontend_url: config.cors.allowed_origins.first().cloned().unwrap_or_default(),
+        backend_url: config.flitt.backend_url.clone(),
     };
     let allowed_origins: Vec<HeaderValue> = config
         .cors
