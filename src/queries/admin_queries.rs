@@ -3,8 +3,8 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        Product, ProductImage, ProductRequest, UserQuery, UserRequest, UserResponse,
-        UserSearchResponse,
+        Order, OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, UserQuery,
+        UserRequest, UserResponse, UserSearchResponse,
     },
 };
 
@@ -232,4 +232,73 @@ pub async fn delete_user(pool: &PgPool, id: i32) -> Result<u64> {
         .await?;
 
     Ok(result.rows_affected())
+}
+
+pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearchResponse> {
+    let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+    let offset = params.offset.unwrap_or(0);
+
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT *, COUNT(*) OVER() as total_count FROM orders WHERE 1=1",
+    );
+
+    if let Some(id) = params.id {
+        query_builder.push(" AND id = ");
+        query_builder.push_bind(id);
+    }
+
+    if let Some(user_id) = params.user_id {
+        query_builder.push(" AND user_id = ");
+        query_builder.push_bind(user_id);
+    }
+
+    if let Some(ref status) = params.status {
+        query_builder.push(" AND status = ");
+        query_builder.push_bind(status);
+    }
+
+    query_builder.push(" ORDER BY created_at DESC");
+    query_builder.push(" LIMIT ");
+    query_builder.push_bind(limit);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
+
+    #[derive(sqlx::FromRow)]
+    struct SearchResult {
+        #[sqlx(flatten)]
+        order: Order,
+        total_count: i64,
+    }
+
+    let results = query_builder
+        .build_query_as::<SearchResult>()
+        .fetch_all(pool)
+        .await?;
+
+    let total = results.first().map(|r| r.total_count).unwrap_or(0);
+    let orders: Vec<Order> = results.into_iter().map(|r| r.order).collect();
+
+    let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
+    let all_items =
+        crate::queries::order_queries::get_items_for_orders(pool, &order_db_ids).await?;
+
+    let mut items_map: std::collections::HashMap<i32, Vec<_>> = std::collections::HashMap::new();
+    for item in all_items {
+        items_map.entry(item.order_id).or_default().push(item);
+    }
+
+    let orders = orders
+        .into_iter()
+        .map(|order| {
+            let items = items_map.remove(&order.id).unwrap_or_default();
+            crate::models::OrderResponse { order, items }
+        })
+        .collect();
+
+    Ok(OrderSearchResponse {
+        orders,
+        total,
+        limit,
+        offset,
+    })
 }

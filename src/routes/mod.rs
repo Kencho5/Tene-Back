@@ -118,5 +118,7 @@ fn admin_routes() -> Router<AppState> {
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))
         .route("/admin/users/{id}", delete(admin::delete_user))
+        //ADMIN ORDERS
+        .route("/admin/orders", get(admin::get_orders))
         .layer(middleware::from_fn(admin_middleware))
 }

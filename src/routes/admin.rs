@@ -591,3 +591,11 @@ pub async fn delete_category_image(
 
     Ok(StatusCode::NO_CONTENT)
 }
+
+pub async fn get_orders(
+    State(state): State<AppState>,
+    Query(params): Query<OrderQuery>,
+) -> Result<Json<OrderSearchResponse>> {
+    let response = admin_queries::get_orders(&state.db, params).await?;
+    Ok(Json(response))
+}

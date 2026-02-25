@@ -79,3 +79,20 @@ pub struct UserSearchResponse {
     pub limit: i64,
     pub offset: i64,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OrderQuery {
+    pub id: Option<i32>,
+    pub user_id: Option<i32>,
+    pub status: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrderSearchResponse {
+    pub orders: Vec<crate::models::OrderResponse>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+}
