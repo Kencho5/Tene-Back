@@ -36,7 +36,16 @@ pub struct OrderItem {
     pub product_id: i32,
     pub quantity: i32,
     pub price_at_purchase: Decimal,
+    pub product_name: String,
+    pub product_image: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OrderResponse {
+    #[serde(flatten)]
+    pub order: Order,
+    pub items: Vec<OrderItem>,
 }
 
 // Request types

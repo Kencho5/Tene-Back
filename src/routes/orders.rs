@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{CheckoutRequest, CheckoutResponse, Order},
+    models::{CheckoutRequest, CheckoutResponse, OrderResponse},
     queries::{order_queries, products_queries},
     services::flitt_service,
     utils::extractors::extract_user_id,
@@ -32,9 +32,11 @@ pub async fn checkout(
     }
 
     let mut total_amount = Decimal::ZERO;
-    let mut product_ids = Vec::with_capacity(payload.items.len());
-    let mut quantities = Vec::with_capacity(payload.items.len());
-    let mut prices = Vec::with_capacity(payload.items.len());
+    let mut product_ids = Vec::new();
+    let mut quantities = Vec::new();
+    let mut prices = Vec::new();
+    let mut product_names = Vec::new();
+    let mut product_images = Vec::new();
 
     for item in &payload.items {
         if item.quantity <= 0 {
@@ -62,6 +64,18 @@ pub async fn checkout(
             )));
         }
 
+        // Get primary image metadata for snapshot
+        let images = products_queries::find_images_by_product_id(&state.db, item.product_id).await?;
+        let image_json = images.first().map_or(serde_json::Value::Null, |img| {
+            serde_json::json!({
+                "product_id": img.product_id,
+                "image_uuid": img.image_uuid,
+                "color": img.color,
+                "is_primary": img.is_primary,
+                "extension": img.extension,
+            })
+        });
+
         let discounted_price = if product.discount > Decimal::ZERO {
             product.price * (Decimal::ONE - product.discount / Decimal::from(100))
         } else {
@@ -74,6 +88,8 @@ pub async fn checkout(
         product_ids.push(item.product_id);
         quantities.push(item.quantity);
         prices.push(discounted_price);
+        product_names.push(product.name.clone());
+        product_images.push(image_json);
     }
 
     let amount_tetri = (total_amount * Decimal::from(100))
@@ -93,8 +109,16 @@ pub async fn checkout(
     let order =
         order_queries::create_order(&state.db, user_id, &order_id, amount_tetri, &payload).await?;
 
-    order_queries::create_order_items(&state.db, order.id, &product_ids, &quantities, &prices)
-        .await?;
+    order_queries::create_order_items(
+        &state.db,
+        order.id,
+        &product_ids,
+        &quantities,
+        &prices,
+        &product_names,
+        &product_images,
+    )
+    .await?;
 
     order_queries::deduct_stock(&state.db, &product_ids, &quantities).await?;
 
@@ -177,8 +201,25 @@ pub async fn flitt_callback(
 pub async fn get_orders(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-) -> Result<Json<Vec<Order>>> {
+) -> Result<Json<Vec<OrderResponse>>> {
     let user_id = extract_user_id(&claims)?;
     let orders = order_queries::get_user_orders(&state.db, user_id).await?;
-    Ok(Json(orders))
+
+    let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
+    let all_items = order_queries::get_items_for_orders(&state.db, &order_db_ids).await?;
+
+    let mut items_map: std::collections::HashMap<i32, Vec<_>> = std::collections::HashMap::new();
+    for item in all_items {
+        items_map.entry(item.order_id).or_default().push(item);
+    }
+
+    let response = orders
+        .into_iter()
+        .map(|order| {
+            let items = items_map.remove(&order.id).unwrap_or_default();
+            OrderResponse { order, items }
+        })
+        .collect();
+
+    Ok(Json(response))
 }

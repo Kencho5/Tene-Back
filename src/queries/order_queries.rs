@@ -60,16 +60,20 @@ pub async fn create_order_items(
     product_ids: &[i32],
     quantities: &[i32],
     prices: &[Decimal],
+    product_names: &[String],
+    product_images: &[serde_json::Value],
 ) -> Result<Vec<OrderItem>> {
     let items = sqlx::query_as::<_, OrderItem>(
-        "INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
-         SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::decimal[])
+        "INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase, product_name, product_image)
+         SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::decimal[]), unnest($5::varchar[]), unnest($6::jsonb[])
          RETURNING *",
     )
     .bind(order_db_id)
     .bind(product_ids)
     .bind(quantities)
     .bind(prices)
+    .bind(product_names)
+    .bind(product_images)
     .fetch_all(pool)
     .await?;
 
@@ -123,11 +127,11 @@ pub async fn get_user_orders(pool: &PgPool, user_id: i32) -> Result<Vec<Order>> 
     Ok(orders)
 }
 
-pub async fn get_order_items(pool: &PgPool, order_db_id: i32) -> Result<Vec<OrderItem>> {
+pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result<Vec<OrderItem>> {
     let items = sqlx::query_as::<_, OrderItem>(
-        "SELECT * FROM order_items WHERE order_id = $1",
+        "SELECT * FROM order_items WHERE order_id = ANY($1)",
     )
-    .bind(order_db_id)
+    .bind(order_db_ids)
     .fetch_all(pool)
     .await?;
 
