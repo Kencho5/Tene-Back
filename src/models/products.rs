@@ -14,7 +14,8 @@ pub struct Product {
     pub discount: Decimal,
     pub quantity: i32,
     pub specifications: serde_json::Value,
-    pub brand: Option<String>,
+    pub brand_id: Option<i32>,
+    pub brand_name: Option<String>,
     pub warranty: Option<String>,
     pub enabled: bool,
     pub created_at: DateTime<Utc>,
@@ -65,7 +66,7 @@ pub struct ProductQuery {
     pub query: Option<String>,
     pub price_from: Option<i16>,
     pub price_to: Option<i16>,
-    pub brand: Option<String>,
+    pub brand: Option<i32>,
     #[serde(default, deserialize_with = "deserialize_string_vec")]
     pub color: Vec<String>,
     #[serde(default, deserialize_with = "deserialize_sale_types")]
@@ -145,9 +146,16 @@ pub struct FacetValue {
     pub count: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct BrandFacetValue {
+    pub id: i32,
+    pub name: String,
+    pub count: i64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProductFacets {
-    pub brands: Vec<FacetValue>,
+    pub brands: Vec<BrandFacetValue>,
     pub colors: Vec<FacetValue>,
     pub categories: Vec<CategoryFacetValue>,
 }

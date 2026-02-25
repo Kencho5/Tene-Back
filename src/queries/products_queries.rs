@@ -5,13 +5,15 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        Category, CategoryFacetValue, FacetValue, Product, ProductFacets, ProductImage,
-        ProductQuery, ProductResponse, SaleType, SortBy,
+        BrandFacetValue, Category, CategoryFacetValue, FacetValue, Product, ProductFacets,
+        ProductImage, ProductQuery, ProductResponse, SaleType, SortBy,
     },
 };
 
 pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
-    let product = sqlx::query_as::<_, Product>("SELECT * FROM products WHERE id = $1")
+    let product = sqlx::query_as::<_, Product>(
+        "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1"
+    )
         .bind(id)
         .fetch_optional(pool)
         .await?;
@@ -46,9 +48,9 @@ pub async fn search_products(
 
     // If ID is provided, search only by ID
     if let Some(id) = params.id {
-        let mut query = String::from("SELECT * FROM products WHERE id = $1");
+        let mut query = String::from("SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1");
         if let Some(enabled) = params.enabled {
-            query.push_str(&format!(" AND enabled = {}", enabled));
+            query.push_str(&format!(" AND p.enabled = {}", enabled));
         }
 
         let product = sqlx::query_as::<_, Product>(&query)
@@ -98,7 +100,7 @@ pub async fn search_products(
         };
     }
 
-    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.*, ");
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.*, b.name as brand_name, ");
 
     // calc relevance
     if let Some(q) = &params.query {
@@ -111,7 +113,7 @@ pub async fn search_products(
         query_builder.push("0");
     }
     query_builder
-        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p WHERE 1=1");
+        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE 1=1");
 
     if let Some(enabled) = params.enabled {
         query_builder.push(" AND p.enabled = ");
@@ -145,9 +147,9 @@ pub async fn search_products(
         query_builder.push_bind(max_price);
     }
 
-    if let Some(brand) = &params.brand {
-        query_builder.push(" AND p.brand = ");
-        query_builder.push_bind(brand);
+    if let Some(brand_id) = params.brand {
+        query_builder.push(" AND p.brand_id = ");
+        query_builder.push_bind(brand_id);
     }
 
     if !params.color.is_empty() {
@@ -308,16 +310,16 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
 
     let brands_query = format!(
         "SELECT
-            brand as value,
+            b.id,
+            b.name,
             COUNT(*)::bigint as count
-         FROM products
+         FROM products p
+         JOIN brands b ON p.brand_id = b.id
          {}
-         AND brand IS NOT NULL
-         AND brand != ''
-         GROUP BY brand
+         GROUP BY b.id, b.name
          ORDER BY count DESC
          LIMIT 50",
-        where_conditions
+        where_conditions_p
     );
 
     let colors_query = format!(
@@ -351,7 +353,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         where_conditions_p
     );
 
-    let mut brands_q = sqlx::query_as::<_, FacetValue>(&brands_query);
+    let mut brands_q = sqlx::query_as::<_, BrandFacetValue>(&brands_query);
     let mut colors_q = sqlx::query_as::<_, FacetValue>(&colors_query);
     let mut categories_q = sqlx::query_as::<_, CategoryFacetValue>(&categories_query);
 
