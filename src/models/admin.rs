@@ -80,6 +80,18 @@ pub struct UserSearchResponse {
     pub offset: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Brand {
+    pub id: i32,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BrandRequest {
+    pub name: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrderQuery {
     pub id: Option<i32>,

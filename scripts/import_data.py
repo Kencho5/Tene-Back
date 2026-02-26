@@ -90,11 +90,10 @@ async def import_brands(pool, products_csv_path):
                 brands[int(bid)] = btitle
 
     async with pool.acquire() as conn:
-        for old_id, name in sorted(brands.items()):
-            await conn.execute(
-                "INSERT INTO brands (id, name) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
-                old_id, name
-            )
+        await conn.executemany(
+            "INSERT INTO brands (id, name) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
+            [(old_id, name) for old_id, name in sorted(brands.items())]
+        )
         await conn.execute("SELECT setval('brands_id_seq', (SELECT COALESCE(MAX(id), 1) FROM brands))")
 
     print(f"Inserted {len(brands)} brands")
@@ -288,81 +287,92 @@ async def import_products(pool, products_csv_path, categories_csv_path, cat_old_
     skipped = 0
     images_uploaded = 0
 
-    # Insert products into DB
-    async with pool.acquire() as conn:
-        for row in rows:
-            code = row.get('code', '').strip()
-            product_id = parse_product_id(code, row.get('id', ''))
-            if product_id is None:
-                skipped += 1
-                continue
+    # Parse all product data
+    product_records = []
+    category_records = []
 
-            name = row.get('title', '').strip()
-            if not name:
-                skipped += 1
-                continue
+    for row in rows:
+        code = row.get('code', '').strip()
+        product_id = parse_product_id(code, row.get('id', ''))
+        if product_id is None:
+            skipped += 1
+            continue
 
-            description = row.get('text', '').strip() or None
-            price_str = row.get('price', '').strip()
+        name = row.get('title', '').strip()
+        if not name:
+            skipped += 1
+            continue
+
+        description = row.get('text', '').strip() or None
+        price_str = row.get('price', '').strip()
+        try:
+            price = float(price_str) if price_str else 0.0
+        except ValueError:
+            cleaned = re.sub(r'\.{2,}', '.', price_str)
             try:
-                price = float(price_str) if price_str else 0.0
+                price = float(cleaned)
             except ValueError:
-                # Fix malformed prices like "289..99"
-                cleaned = re.sub(r'\.{2,}', '.', price_str)
-                try:
-                    price = float(cleaned)
-                except ValueError:
-                    price = 0.0
-            sale_percent = float(row.get('sale_percent', '0').strip() or '0')
-            stock = int(row.get('stock', '0').strip() or '0')
-            brand_raw = row.get('brand', '').strip()
-            brand_id = int(brand_raw) if brand_raw and brand_raw != '0' else None
-            warranty = parse_warranty(
-                row.get('guarantee_amount', ''),
-                row.get('guarantee_type', '')
-            )
-            active = row.get('active', '0').strip()
-            enabled = active == '1'
+                price = 0.0
+        sale_percent = float(row.get('sale_percent', '0').strip() or '0')
+        stock = int(row.get('stock', '0').strip() or '0')
+        brand_raw = row.get('brand', '').strip()
+        brand_id = int(brand_raw) if brand_raw and brand_raw != '0' else None
+        warranty = parse_warranty(
+            row.get('guarantee_amount', ''),
+            row.get('guarantee_type', '')
+        )
+        active = row.get('active', '0').strip()
+        enabled = active == '1'
 
+        product_records.append((
+            product_id, name, description, price, sale_percent, stock,
+            brand_id, warranty, enabled
+        ))
+
+        # Map product to category
+        cat_val = row.get('category', '').strip()
+        mid_val = row.get('middle', '').strip()
+        par_val = row.get('parent', '').strip()
+        old_cat_id = None
+        for val in [cat_val, mid_val, par_val]:
+            if val in link_cat_map:
+                old_cat_id = link_cat_map[val]
+                break
+        if old_cat_id and old_cat_id in cat_old_to_new:
+            category_records.append((product_id, cat_old_to_new[old_cat_id]))
+
+    # Bulk insert products in batches
+    BATCH_SIZE = 500
+    async with pool.acquire() as conn:
+        for i in range(0, len(product_records), BATCH_SIZE):
+            batch = product_records[i:i + BATCH_SIZE]
             try:
-                await conn.execute(
+                await conn.executemany(
                     """INSERT INTO products (id, name, description, price, discount, quantity, specifications, brand_id, warranty, enabled)
                        VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7, $8, $9)
                        ON CONFLICT (id) DO UPDATE SET
                            brand_id = COALESCE(EXCLUDED.brand_id, products.brand_id),
                            warranty = COALESCE(EXCLUDED.warranty, products.warranty),
                            enabled = EXCLUDED.enabled""",
-                    product_id, name, description, price, sale_percent, stock,
-                    brand_id, warranty, enabled
+                    batch
                 )
-                inserted += 1
+                inserted += len(batch)
+                print(f"  Inserted batch {i // BATCH_SIZE + 1} ({inserted}/{len(product_records)})")
             except Exception as e:
-                print(f"  FAIL product {product_id} '{name}': {e}")
-                skipped += 1
-                continue
+                print(f"  FAIL batch {i // BATCH_SIZE + 1}: {e}")
+                skipped += len(batch)
 
-            # Map product to category
-            cat_val = row.get('category', '').strip()
-            mid_val = row.get('middle', '').strip()
-            par_val = row.get('parent', '').strip()
-
-            # Try category -> middle -> parent via link_cat mapping
-            old_cat_id = None
-            for val in [cat_val, mid_val, par_val]:
-                if val in link_cat_map:
-                    old_cat_id = link_cat_map[val]
-                    break
-
-            if old_cat_id and old_cat_id in cat_old_to_new:
-                new_cat_id = cat_old_to_new[old_cat_id]
-                try:
-                    await conn.execute(
-                        """INSERT INTO product_categories (product_id, category_id)
-                           VALUES ($1, $2) ON CONFLICT DO NOTHING""",
-                        product_id, new_cat_id
-                    )
-                except Exception as e:
-                    print(f"  FAIL category assign for product {product_id}: {e}")
+        # Bulk insert category mappings
+        if category_records:
+            try:
+                await conn.executemany(
+                    """INSERT INTO product_categories (product_id, category_id)
+                       VALUES ($1, $2) ON CONFLICT DO NOTHING""",
+                    category_records
+                )
+                print(f"  Assigned {len(category_records)} product-category mappings")
+            except Exception as e:
+                print(f"  FAIL category assignments: {e}")
 
     print(f"Inserted {inserted} products, skipped {skipped}")
 

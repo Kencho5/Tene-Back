@@ -592,6 +592,70 @@ pub async fn delete_category_image(
     Ok(StatusCode::NO_CONTENT)
 }
 
+// BRAND ROUTES
+pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>>> {
+    let brands = admin_queries::get_brands(&state.db).await?;
+    Ok(Json(brands))
+}
+
+pub async fn create_brand(
+    State(state): State<AppState>,
+    Json(payload): Json<BrandRequest>,
+) -> Result<Json<Brand>> {
+    if admin_queries::find_brand_by_name(&state.db, &payload.name)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::Conflict(format!(
+            "Brand '{}' already exists",
+            payload.name
+        )));
+    }
+
+    let brand = admin_queries::create_brand(&state.db, &payload.name).await?;
+    Ok(Json(brand))
+}
+
+pub async fn update_brand(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<BrandRequest>,
+) -> Result<Json<Brand>> {
+    if admin_queries::find_brand_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!("Brand with id {} not found", id)));
+    }
+
+    if let Some(existing) = admin_queries::find_brand_by_name(&state.db, &payload.name).await? {
+        if existing.id != id {
+            return Err(AppError::Conflict(format!(
+                "Brand '{}' already exists",
+                payload.name
+            )));
+        }
+    }
+
+    let brand = admin_queries::update_brand(&state.db, id, &payload.name).await?;
+    Ok(Json(brand))
+}
+
+pub async fn delete_brand(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<StatusCode> {
+    if admin_queries::find_brand_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!("Brand with id {} not found", id)));
+    }
+
+    admin_queries::delete_brand(&state.db, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn get_orders(
     State(state): State<AppState>,
     Query(params): Query<OrderQuery>,

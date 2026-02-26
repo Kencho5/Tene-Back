@@ -46,6 +46,7 @@ fn products_routes() -> Router<AppState> {
         .route("/products", get(products::search_product))
         .route("/products/facets", get(products::get_product_facets))
         .route("/products/{id}", get(products::get_product))
+        .route("/brands", get(products::get_brands))
 }
 
 fn categories_routes() -> Router<AppState> {
@@ -114,6 +115,11 @@ fn admin_routes() -> Router<AppState> {
             "/admin/categories/{id}/image/{image_uuid}",
             delete(admin::delete_category_image),
         )
+        //ADMIN BRANDS
+        .route("/admin/brands", get(admin::get_brands))
+        .route("/admin/brands", post(admin::create_brand))
+        .route("/admin/brands/{id}", put(admin::update_brand))
+        .route("/admin/brands/{id}", delete(admin::delete_brand))
         //ADMIN USERS
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))

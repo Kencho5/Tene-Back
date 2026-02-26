@@ -65,7 +65,8 @@ pub async fn checkout(
         }
 
         // Get primary image metadata for snapshot
-        let images = products_queries::find_images_by_product_id(&state.db, item.product_id).await?;
+        let images =
+            products_queries::find_images_by_product_id(&state.db, item.product_id).await?;
         let image_json = images.first().map_or(serde_json::Value::Null, |img| {
             serde_json::json!({
                 "product_id": img.product_id,

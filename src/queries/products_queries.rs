@@ -36,7 +36,7 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
 }
 
 const SIMILARITY_THRESHOLD: f64 = 0.25;
-const DEFAULT_PAGE_SIZE: i64 = 6;
+const DEFAULT_PAGE_SIZE: i64 = 15;
 const MAX_PAGE_SIZE: i64 = 100;
 
 pub async fn search_products(
@@ -48,7 +48,9 @@ pub async fn search_products(
 
     // If ID is provided, search only by ID
     if let Some(id) = params.id {
-        let mut query = String::from("SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1");
+        let mut query = String::from(
+            "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1",
+        );
         if let Some(enabled) = params.enabled {
             query.push_str(&format!(" AND p.enabled = {}", enabled));
         }
@@ -100,7 +102,8 @@ pub async fn search_products(
         };
     }
 
-    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.*, b.name as brand_name, ");
+    let mut query_builder =
+        sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.*, b.name as brand_name, ");
 
     // calc relevance
     if let Some(q) = &params.query {
@@ -162,7 +165,7 @@ pub async fn search_products(
         query_builder.push(
             " AND EXISTS (
                 WITH RECURSIVE category_tree AS (
-                    SELECT id FROM categories WHERE id = ANY("
+                    SELECT id FROM categories WHERE id = ANY(",
         );
         query_builder.push_bind(&params.category_id);
         query_builder.push(
@@ -174,7 +177,7 @@ pub async fn search_products(
                 SELECT 1 FROM product_categories pc
                 WHERE pc.product_id = p.id
                 AND pc.category_id IN (SELECT id FROM category_tree)
-            )"
+            )",
         );
     }
 
@@ -265,13 +268,13 @@ pub async fn search_products(
     .fetch_all(pool)
     .await?;
 
-    let mut category_groups: HashMap<i32, Vec<Category>> = categories.into_iter().fold(
-        HashMap::with_capacity(product_ids.len()),
-        |mut acc, row| {
-            acc.entry(row.product_id).or_default().push(row.category);
-            acc
-        },
-    );
+    let mut category_groups: HashMap<i32, Vec<Category>> =
+        categories
+            .into_iter()
+            .fold(HashMap::with_capacity(product_ids.len()), |mut acc, row| {
+                acc.entry(row.product_id).or_default().push(row.category);
+                acc
+            });
 
     let products = results
         .into_iter()

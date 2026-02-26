@@ -6,8 +6,8 @@ use axum::{
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{ProductFacets, ProductQuery, ProductResponse, ProductSearchResponse},
-    queries::products_queries,
+    models::{Brand, ProductFacets, ProductQuery, ProductResponse, ProductSearchResponse},
+    queries::{admin_queries, products_queries},
 };
 
 pub async fn search_product(
@@ -50,4 +50,9 @@ pub async fn get_product_facets(
     let facets = products_queries::get_product_facets(&state.db, params).await?;
 
     Ok(Json(facets))
+}
+
+pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>>> {
+    let brands = admin_queries::get_brands(&state.db).await?;
+    Ok(Json(brands))
 }

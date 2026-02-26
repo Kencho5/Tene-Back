@@ -3,8 +3,8 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        Order, OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, UserQuery,
-        UserRequest, UserResponse, UserSearchResponse,
+        Brand, Order, OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest,
+        UserQuery, UserRequest, UserResponse, UserSearchResponse,
     },
 };
 
@@ -72,6 +72,59 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
     .await?;
 
     Ok(product)
+}
+
+// BRAND QUERIES
+pub async fn get_brands(pool: &PgPool) -> Result<Vec<Brand>> {
+    let brands = sqlx::query_as::<_, Brand>("SELECT * FROM brands ORDER BY name ASC")
+        .fetch_all(pool)
+        .await?;
+    Ok(brands)
+}
+
+pub async fn create_brand(pool: &PgPool, name: &str) -> Result<Brand> {
+    let brand = sqlx::query_as::<_, Brand>(
+        "INSERT INTO brands (name) VALUES ($1) RETURNING *",
+    )
+    .bind(name)
+    .fetch_one(pool)
+    .await?;
+    Ok(brand)
+}
+
+pub async fn update_brand(pool: &PgPool, id: i32, name: &str) -> Result<Brand> {
+    let brand = sqlx::query_as::<_, Brand>(
+        "UPDATE brands SET name = $1 WHERE id = $2 RETURNING *",
+    )
+    .bind(name)
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+    Ok(brand)
+}
+
+pub async fn delete_brand(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM brands WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+pub async fn find_brand_by_name(pool: &PgPool, name: &str) -> Result<Option<Brand>> {
+    let brand = sqlx::query_as::<_, Brand>("SELECT * FROM brands WHERE name = $1")
+        .bind(name)
+        .fetch_optional(pool)
+        .await?;
+    Ok(brand)
+}
+
+pub async fn find_brand_by_id(pool: &PgPool, id: i32) -> Result<Option<Brand>> {
+    let brand = sqlx::query_as::<_, Brand>("SELECT * FROM brands WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(brand)
 }
 
 pub async fn delete_product(pool: &PgPool, id: i32) -> Result<u64> {
