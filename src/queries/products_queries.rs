@@ -296,79 +296,125 @@ pub async fn search_products(
 }
 
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
-    let mut where_conditions = String::from("WHERE 1=1");
-    let mut where_conditions_p = String::from("WHERE 1=1");
+    let mut filter_builder =
+        sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.id FROM products p WHERE 1=1");
 
     if let Some(enabled) = params.enabled {
-        where_conditions.push_str(&format!(" AND enabled = {}", enabled));
-        where_conditions_p.push_str(&format!(" AND p.enabled = {}", enabled));
-    }
-    let mut bindings: Vec<String> = Vec::new();
-
-    if let Some(ref q) = params.query {
-        where_conditions.push_str(" AND (name ILIKE $1 OR description ILIKE $1 OR similarity(name, $1) > 0.3 OR similarity(COALESCE(description, ''), $1) > 0.3)");
-        where_conditions_p.push_str(" AND (p.name ILIKE $1 OR p.description ILIKE $1 OR similarity(p.name, $1) > 0.3 OR similarity(COALESCE(p.description, ''), $1) > 0.3)");
-        bindings.push(format!("%{}%", q));
+        filter_builder.push(" AND p.enabled = ");
+        filter_builder.push_bind(enabled);
     }
 
-    let brands_query = format!(
-        "SELECT
-            b.id,
-            b.name,
-            COUNT(*)::bigint as count
+    if let Some(q) = &params.query {
+        filter_builder.push(" AND (p.name ILIKE ");
+        filter_builder.push_bind(format!("%{}%", q));
+        filter_builder.push(" OR p.description ILIKE ");
+        filter_builder.push_bind(format!("%{}%", q));
+        filter_builder.push(" OR similarity(p.name, ");
+        filter_builder.push_bind(q);
+        filter_builder.push(") > 0.3 OR similarity(COALESCE(p.description, ''), ");
+        filter_builder.push_bind(q);
+        filter_builder.push(") > 0.3)");
+    }
+
+    if let Some(min_price) = params.price_from {
+        filter_builder.push(" AND p.price >= ");
+        filter_builder.push_bind(min_price);
+    }
+    if let Some(max_price) = params.price_to {
+        filter_builder.push(" AND p.price <= ");
+        filter_builder.push_bind(max_price);
+    }
+
+    if let Some(brand_id) = params.brand {
+        filter_builder.push(" AND p.brand_id = ");
+        filter_builder.push_bind(brand_id);
+    }
+
+    if !params.color.is_empty() {
+        filter_builder.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
+        filter_builder.push_bind(&params.color);
+        filter_builder.push("))");
+    }
+
+    if !params.category_id.is_empty() {
+        filter_builder.push(
+            " AND EXISTS (
+                WITH RECURSIVE category_tree AS (
+                    SELECT id FROM categories WHERE id = ANY(",
+        );
+        filter_builder.push_bind(&params.category_id);
+        filter_builder.push(
+            ")
+                    UNION ALL
+                    SELECT c.id FROM categories c
+                    INNER JOIN category_tree ct ON c.parent_id = ct.id
+                )
+                SELECT 1 FROM product_categories pc
+                WHERE pc.product_id = p.id
+                AND pc.category_id IN (SELECT id FROM category_tree)
+            )",
+        );
+    }
+
+    let has_discount = params.sale_type.contains(&SaleType::Discount);
+    let has_coins = params.sale_type.contains(&SaleType::Coins);
+    if has_discount && !has_coins {
+        filter_builder.push(" AND p.discount > 0");
+    } else if !has_discount && has_coins {
+        filter_builder.push(" AND false");
+    }
+
+    // First, get filtered product IDs
+    let filtered_ids: Vec<i32> = filter_builder.build_query_scalar().fetch_all(pool).await?;
+
+    if filtered_ids.is_empty() {
+        return Ok(ProductFacets {
+            brands: Vec::new(),
+            colors: Vec::new(),
+            categories: Vec::new(),
+        });
+    }
+
+    // Query all three facets using the filtered IDs
+    let brands = sqlx::query_as::<_, BrandFacetValue>(
+        "SELECT b.id, b.name, COUNT(*)::bigint as count
          FROM products p
          JOIN brands b ON p.brand_id = b.id
-         {}
+         WHERE p.id = ANY($1)
          GROUP BY b.id, b.name
          ORDER BY count DESC
          LIMIT 50",
-        where_conditions_p
-    );
+    )
+    .bind(&filtered_ids)
+    .fetch_all(pool)
+    .await?;
 
-    let colors_query = format!(
-        "SELECT
-            pi.color as value,
-            COUNT(DISTINCT p.id)::bigint as count
-         FROM products p
-         JOIN product_images pi ON p.id = pi.product_id
-         {}
-         AND pi.color IS NOT NULL
-         AND pi.color != ''
+    let colors = sqlx::query_as::<_, FacetValue>(
+        "SELECT pi.color as value, COUNT(DISTINCT p.id)::bigint as count
+         FROM product_images pi
+         JOIN products p ON pi.product_id = p.id
+         WHERE p.id = ANY($1) AND pi.color IS NOT NULL AND pi.color != ''
          GROUP BY pi.color
          ORDER BY count DESC
          LIMIT 50",
-        where_conditions_p
-    );
+    )
+    .bind(&filtered_ids)
+    .fetch_all(pool)
+    .await?;
 
-    let categories_query = format!(
-        "SELECT
-            c.id,
-            c.name,
-            COUNT(DISTINCT p.id)::bigint as count
-         FROM products p
-         JOIN product_categories pc ON p.id = pc.product_id
+    let categories = sqlx::query_as::<_, CategoryFacetValue>(
+        "SELECT c.id, c.name, COUNT(DISTINCT p.id)::bigint as count
+         FROM product_categories pc
          JOIN categories c ON pc.category_id = c.id
-         {}
-         AND c.enabled = true
+         JOIN products p ON pc.product_id = p.id
+         WHERE p.id = ANY($1) AND c.enabled = true
          GROUP BY c.id, c.name
-         ORDER BY c.display_order ASC, c.name ASC
+         ORDER BY count DESC
          LIMIT 100",
-        where_conditions_p
-    );
-
-    let mut brands_q = sqlx::query_as::<_, BrandFacetValue>(&brands_query);
-    let mut colors_q = sqlx::query_as::<_, FacetValue>(&colors_query);
-    let mut categories_q = sqlx::query_as::<_, CategoryFacetValue>(&categories_query);
-
-    for binding in &bindings {
-        brands_q = brands_q.bind(binding);
-        colors_q = colors_q.bind(binding);
-        categories_q = categories_q.bind(binding);
-    }
-
-    let brands = brands_q.fetch_all(pool).await?;
-    let colors = colors_q.fetch_all(pool).await?;
-    let categories = categories_q.fetch_all(pool).await?;
+    )
+    .bind(&filtered_ids)
+    .fetch_all(pool)
+    .await?;
 
     Ok(ProductFacets {
         brands,
