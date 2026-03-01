@@ -21,14 +21,14 @@ pub enum AppError {
 impl fmt::Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AppError::DatabaseError(e) => write!(f, "Database error: {}", e),
-            AppError::ConfigError(msg) => write!(f, "Configuration error: {}", msg),
-            AppError::InternalError(msg) => write!(f, "Internal error: {}", msg),
-            AppError::NotFound(msg) => write!(f, "Not found: {}", msg),
-            AppError::BadRequest(msg) => write!(f, "Bad request: {}", msg),
-            AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
-            AppError::Unauthorized(msg) => write!(f, "Unauthorized: {}", msg),
-            AppError::Forbidden(msg) => write!(f, "Forbidden: {}", msg),
+            AppError::DatabaseError(e) => write!(f, "მონაცემთა ბაზის შეცდომა: {}", e),
+            AppError::ConfigError(msg) => write!(f, "კონფიგურაციის შეცდომა: {}", msg),
+            AppError::InternalError(msg) => write!(f, "შიდა შეცდომა: {}", msg),
+            AppError::NotFound(msg) => write!(f, "ვერ მოიძებნა: {}", msg),
+            AppError::BadRequest(msg) => write!(f, "არასწორი მოთხოვნა: {}", msg),
+            AppError::Conflict(msg) => write!(f, "კონფლიქტი: {}", msg),
+            AppError::Unauthorized(msg) => write!(f, "არაავტორიზებული: {}", msg),
+            AppError::Forbidden(msg) => write!(f, "აკრძალული: {}", msg),
         }
     }
 }
