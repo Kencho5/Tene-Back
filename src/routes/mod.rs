@@ -29,7 +29,6 @@ pub fn create_router() -> Router<AppState> {
         .merge(user_routes())
         .merge(checkout_routes())
         .route("/payments/callback", post(orders::flitt_callback))
-        .route("/payments/result", post(orders::flitt_result))
         .merge(admin_routes())
 }
 

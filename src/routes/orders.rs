@@ -1,4 +1,4 @@
-use axum::{Extension, Form, Json, extract::State, http::StatusCode, response::{IntoResponse, Redirect}};
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use rust_decimal::{Decimal, dec};
 use uuid::Uuid;
 
@@ -124,7 +124,7 @@ pub async fn checkout(
     .await?;
 
     let server_callback_url = format!("{}/payments/callback", state.backend_url);
-    let response_url = format!("{}/payments/result", state.backend_url);
+    let response_url = format!("{}/checkout/result", state.frontend_url);
 
     let checkout_url = flitt_service::create_checkout_url(
         state.flitt_merchant_id,
@@ -225,25 +225,4 @@ pub async fn get_orders(
         .collect();
 
     Ok(Json(response))
-}
-
-#[derive(serde::Deserialize)]
-pub struct FlittResultForm {
-    pub order_id: Option<String>,
-    pub order_status: Option<String>,
-}
-
-pub async fn flitt_result(
-    State(state): State<AppState>,
-    Form(form): Form<FlittResultForm>,
-) -> impl IntoResponse {
-    let order_id = form.order_id.unwrap_or_default();
-    let status = form.order_status.unwrap_or_default();
-
-    let redirect_url = format!(
-        "{}/checkout/result?order_id={}&status={}",
-        state.frontend_url, order_id, status
-    );
-
-    Redirect::to(&redirect_url)
 }
