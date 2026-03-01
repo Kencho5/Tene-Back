@@ -137,6 +137,7 @@ pub async fn generate_product_urls(
             req.color,
             req.is_primary,
             extension,
+            req.quantity.unwrap_or(0),
         )
         .await?;
 
@@ -185,9 +186,9 @@ pub async fn update_product_image_metadata(
     Path((product_id, image_uuid)): Path<(i32, Uuid)>,
     Json(payload): Json<ImageMetadataUpdate>,
 ) -> Result<Json<ProductImage>> {
-    if payload.color.is_none() && payload.is_primary.is_none() {
+    if payload.color.is_none() && payload.is_primary.is_none() && payload.quantity.is_none() {
         return Err(AppError::BadRequest(
-            "At least one field (color or is_primary) must be provided".to_string(),
+            "At least one field (color, is_primary, or quantity) must be provided".to_string(),
         ));
     }
 
@@ -197,6 +198,7 @@ pub async fn update_product_image_metadata(
         image_uuid,
         payload.color,
         payload.is_primary,
+        payload.quantity,
     )
     .await?
     .ok_or_else(|| {

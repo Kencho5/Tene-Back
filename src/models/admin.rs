@@ -23,6 +23,7 @@ pub struct ImageUploadRequest {
     pub color: Option<String>,
     pub is_primary: bool,
     pub content_type: String,
+    pub quantity: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +47,7 @@ pub struct ProductImageUrlResponse {
 pub struct ImageMetadataUpdate {
     pub color: Option<String>,
     pub is_primary: Option<bool>,
+    pub quantity: Option<i32>,
 }
 
 #[derive(Debug, Deserialize)]

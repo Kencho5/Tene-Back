@@ -23,7 +23,7 @@ pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
 
 pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<ProductImage>> {
     let product_images = sqlx::query_as::<_, ProductImage>(
-        "SELECT product_id, image_uuid, color, is_primary, extension
+        "SELECT product_id, image_uuid, color, is_primary, extension, quantity
          FROM product_images
          WHERE product_id = $1
          ORDER BY is_primary DESC, created_at ASC",
@@ -33,6 +33,46 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
     .await?;
 
     Ok(product_images)
+}
+
+pub async fn find_by_ids(pool: &PgPool, ids: &[i32]) -> Result<HashMap<i32, Product>> {
+    let products = sqlx::query_as::<_, Product>(
+        "SELECT p.*, b.name as brand_name
+         FROM products p LEFT JOIN brands b ON p.brand_id = b.id
+         WHERE p.id = ANY($1)",
+    )
+    .bind(ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(products.into_iter().map(|p| (p.id, p)).collect())
+}
+
+pub async fn find_images_by_product_ids(
+    pool: &PgPool,
+    ids: &[i32],
+) -> Result<HashMap<i32, Vec<ProductImage>>> {
+    let images = sqlx::query_as::<_, ProductImage>(
+        "SELECT product_id, image_uuid, color, is_primary, extension, quantity
+         FROM product_images
+         WHERE product_id = ANY($1)
+         ORDER BY product_id, is_primary DESC, created_at ASC",
+    )
+    .bind(ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut groups: HashMap<i32, Vec<ProductImage>> = HashMap::new();
+    for img in images {
+        groups.entry(img.product_id).or_default().push(img);
+    }
+    Ok(groups)
+}
+
+fn escape_like(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 const SIMILARITY_THRESHOLD: f64 = 0.25;
@@ -48,22 +88,30 @@ pub async fn search_products(
 
     // If ID is provided, search only by ID
     if let Some(id) = params.id {
-        let mut query = String::from(
-            "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1",
-        );
-        if let Some(enabled) = params.enabled {
-            query.push_str(&format!(" AND p.enabled = {}", enabled));
-        }
-
-        let product = sqlx::query_as::<_, Product>(&query)
-            .bind(id)
-            .fetch_optional(pool)
-            .await?;
+        let product = match params.enabled {
+            Some(enabled) => {
+                sqlx::query_as::<_, Product>(
+                    "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1 AND p.enabled = $2",
+                )
+                .bind(id)
+                .bind(enabled)
+                .fetch_optional(pool)
+                .await?
+            }
+            None => {
+                sqlx::query_as::<_, Product>(
+                    "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1",
+                )
+                .bind(id)
+                .fetch_optional(pool)
+                .await?
+            }
+        };
 
         return match product {
             Some(product) => {
                 let images = sqlx::query_as::<_, ProductImage>(
-                    "SELECT product_id, image_uuid, color, is_primary, extension
+                    "SELECT product_id, image_uuid, color, is_primary, extension, quantity
                      FROM product_images
                      WHERE product_id = $1
                      ORDER BY is_primary DESC, created_at ASC",
@@ -124,10 +172,11 @@ pub async fn search_products(
     }
 
     if let Some(q) = &params.query {
+        let like_q = format!("%{}%", escape_like(q));
         query_builder.push(" AND (p.name ILIKE ");
-        query_builder.push_bind(format!("%{}%", q));
+        query_builder.push_bind(like_q.clone());
         query_builder.push(" OR p.description ILIKE ");
-        query_builder.push_bind(format!("%{}%", q));
+        query_builder.push_bind(like_q);
 
         query_builder.push(" OR similarity(p.name, ");
         query_builder.push_bind(q);
@@ -232,7 +281,7 @@ pub async fn search_products(
     let product_ids: Vec<i32> = results.iter().map(|r| r.product.id).collect();
 
     let images = sqlx::query_as::<_, ProductImage>(
-        "SELECT product_id, image_uuid, color, is_primary, extension
+        "SELECT product_id, image_uuid, color, is_primary, extension, quantity
          FROM product_images
          WHERE product_id = ANY($1)
          ORDER BY product_id, is_primary DESC, created_at ASC",
@@ -305,10 +354,11 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
     }
 
     if let Some(q) = &params.query {
+        let like_q = format!("%{}%", escape_like(q));
         filter_builder.push(" AND (p.name ILIKE ");
-        filter_builder.push_bind(format!("%{}%", q));
+        filter_builder.push_bind(like_q.clone());
         filter_builder.push(" OR p.description ILIKE ");
-        filter_builder.push_bind(format!("%{}%", q));
+        filter_builder.push_bind(like_q);
         filter_builder.push(" OR similarity(p.name, ");
         filter_builder.push_bind(q);
         filter_builder.push(") > 0.3 OR similarity(COALESCE(p.description, ''), ");

@@ -29,6 +29,7 @@ pub struct ProductImage {
     pub color: Option<String>,
     pub is_primary: bool,
     pub extension: String,
+    pub quantity: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,8 +65,8 @@ pub enum SaleType {
 pub struct ProductQuery {
     pub id: Option<i32>,
     pub query: Option<String>,
-    pub price_from: Option<i16>,
-    pub price_to: Option<i16>,
+    pub price_from: Option<i32>,
+    pub price_to: Option<i32>,
     pub brand: Option<i32>,
     #[serde(default, deserialize_with = "deserialize_string_vec")]
     pub color: Vec<String>,

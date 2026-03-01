@@ -34,6 +34,7 @@ pub struct OrderItem {
     pub id: i32,
     pub order_id: i32,
     pub product_id: i32,
+    pub color: Option<String>,
     pub quantity: i32,
     pub price_at_purchase: Decimal,
     pub product_name: String,
@@ -66,6 +67,7 @@ pub struct CompanyInfo {
 #[derive(Debug, Deserialize)]
 pub struct CartItem {
     pub product_id: i32,
+    pub color: Option<String>,
     pub quantity: i32,
 }
 
@@ -90,46 +92,3 @@ pub struct CheckoutResponse {
     pub checkout_url: String,
 }
 
-// Flitt callback payload
-
-#[derive(Debug, Deserialize)]
-pub struct FlittCallbackPayload {
-    pub order_id: Option<String>,
-    pub order_status: Option<String>,
-    pub payment_id: Option<i32>,
-    pub amount: Option<String>,
-    pub currency: Option<String>,
-    pub signature: Option<String>,
-    pub response_status: Option<String>,
-    pub merchant_id: Option<i32>,
-    pub masked_card: Option<String>,
-    pub card_bin: Option<serde_json::Value>,
-    pub card_type: Option<String>,
-    pub rrn: Option<String>,
-    pub approval_code: Option<String>,
-    pub sender_email: Option<String>,
-    pub sender_cell_phone: Option<String>,
-    pub sender_account: Option<String>,
-    pub fee: Option<String>,
-    pub payment_system: Option<String>,
-    pub eci: Option<String>,
-    pub actual_amount: Option<String>,
-    pub actual_currency: Option<String>,
-    pub product_id: Option<String>,
-    pub merchant_data: Option<String>,
-    pub verification_status: Option<String>,
-    pub rectoken: Option<String>,
-    pub rectoken_lifetime: Option<String>,
-    pub reversal_amount: Option<String>,
-    pub settlement_amount: Option<String>,
-    pub settlement_currency: Option<String>,
-    pub settlement_date: Option<String>,
-    pub response_description: Option<String>,
-    pub response_code: Option<String>,
-    pub order_time: Option<String>,
-    pub tran_type: Option<String>,
-    pub parent_order_id: Option<String>,
-    pub fee_oplata: Option<String>,
-    pub additional_info: Option<String>,
-    pub response_signature_string: Option<String>,
-}

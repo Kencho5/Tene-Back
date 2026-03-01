@@ -48,13 +48,12 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
             description = COALESCE($2, description),
             price = COALESCE($3, price),
             discount = COALESCE($4, discount),
-            quantity = COALESCE($5, quantity),
-            specifications = COALESCE($6, specifications),
-            brand_id = COALESCE($7, brand_id),
-            warranty = COALESCE($8, warranty),
-            enabled = COALESCE($9, enabled),
+            specifications = COALESCE($5, specifications),
+            brand_id = COALESCE($6, brand_id),
+            warranty = COALESCE($7, warranty),
+            enabled = COALESCE($8, enabled),
             updated_at = NOW()
-        WHERE id = $10
+        WHERE id = $9
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
@@ -62,7 +61,6 @@ pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Res
     .bind(&req.description)
     .bind(&req.price)
     .bind(&req.discount)
-    .bind(&req.quantity)
     .bind(&req.specifications)
     .bind(&req.brand_id)
     .bind(&req.warranty)
@@ -143,11 +141,12 @@ pub async fn add_product_image(
     color: Option<String>,
     is_primary: bool,
     extension: &str,
+    quantity: i32,
 ) -> Result<()> {
     sqlx::query(
         r#"
-        INSERT INTO product_images(product_id, image_uuid, color, is_primary, extension)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO product_images(product_id, image_uuid, color, is_primary, extension, quantity)
+        VALUES ($1, $2, $3, $4, $5, $6)
         "#,
     )
     .bind(product_id)
@@ -155,6 +154,7 @@ pub async fn add_product_image(
     .bind(color)
     .bind(is_primary)
     .bind(extension)
+    .bind(quantity)
     .execute(pool)
     .await?;
 
@@ -183,13 +183,15 @@ pub async fn update_product_image_metadata(
     image_uuid: uuid::Uuid,
     color: Option<String>,
     is_primary: Option<bool>,
+    quantity: Option<i32>,
 ) -> Result<Option<ProductImage>> {
     let updated_image = sqlx::query_as::<_, ProductImage>(
         r#"
         UPDATE product_images
         SET
             color = COALESCE($3, color),
-            is_primary = COALESCE($4, is_primary)
+            is_primary = COALESCE($4, is_primary),
+            quantity = COALESCE($5, quantity)
         WHERE product_id = $1 AND image_uuid = $2
         RETURNING *
         "#,
@@ -198,6 +200,7 @@ pub async fn update_product_image_metadata(
     .bind(image_uuid)
     .bind(color)
     .bind(is_primary)
+    .bind(quantity)
     .fetch_optional(pool)
     .await?;
 

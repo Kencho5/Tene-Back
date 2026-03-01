@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use rust_decimal::{Decimal, dec};
 use uuid::Uuid;
@@ -33,13 +35,6 @@ pub async fn checkout(
         return Err(AppError::BadRequest("Address is required".to_string()));
     }
 
-    let mut total_amount = Decimal::ZERO;
-    let mut product_ids = Vec::new();
-    let mut quantities = Vec::new();
-    let mut prices = Vec::new();
-    let mut product_names = Vec::new();
-    let mut product_images = Vec::new();
-
     for item in &payload.items {
         if item.quantity <= 0 {
             return Err(AppError::BadRequest(format!(
@@ -47,9 +42,34 @@ pub async fn checkout(
                 item.product_id
             )));
         }
+    }
 
-        let product = products_queries::find_by_id(&state.db, item.product_id)
-            .await?
+    // Aggregate total demand per product+color for accurate stock checks
+    let mut demand: HashMap<(i32, Option<&str>), i32> = HashMap::new();
+    for item in &payload.items {
+        *demand
+            .entry((item.product_id, item.color.as_deref()))
+            .or_insert(0) += item.quantity;
+    }
+
+    // Batch-fetch all products and images
+    let requested_ids: Vec<i32> = payload.items.iter().map(|i| i.product_id).collect();
+    let all_products = products_queries::find_by_ids(&state.db, &requested_ids).await?;
+    let all_images =
+        products_queries::find_images_by_product_ids(&state.db, &requested_ids).await?;
+
+    let mut total_amount = Decimal::ZERO;
+    let len = payload.items.len();
+    let mut product_ids = Vec::with_capacity(len);
+    let mut colors: Vec<Option<String>> = Vec::with_capacity(len);
+    let mut quantities = Vec::with_capacity(len);
+    let mut prices = Vec::with_capacity(len);
+    let mut product_names = Vec::with_capacity(len);
+    let mut item_images = Vec::with_capacity(len);
+
+    for item in &payload.items {
+        let product = all_products
+            .get(&item.product_id)
             .ok_or_else(|| AppError::NotFound(format!("Product {} not found", item.product_id)))?;
 
         if !product.enabled {
@@ -59,40 +79,76 @@ pub async fn checkout(
             )));
         }
 
-        if product.quantity < item.quantity {
+        let images = all_images
+            .get(&item.product_id)
+            .map(|v| v.as_slice())
+            .unwrap_or_default();
+
+        // Require color when product has multiple color variants
+        let distinct_colors: HashSet<_> = images
+            .iter()
+            .filter_map(|img| img.color.as_deref())
+            .collect();
+
+        if distinct_colors.len() > 1 && item.color.is_none() {
+            return Err(AppError::BadRequest(format!(
+                "Color is required for product {}",
+                item.product_id
+            )));
+        }
+
+        // Find the matching image for display
+        let image = match &item.color {
+            Some(color) => images
+                .iter()
+                .find(|img| img.color.as_deref() == Some(color.as_str())),
+            None => images.iter().find(|img| img.is_primary).or(images.first()),
+        }
+        .ok_or_else(|| {
+            AppError::BadRequest(format!(
+                "Color not available for product {}",
+                item.product_id
+            ))
+        })?;
+
+        // Check stock against total demand for this product+color
+        let total_demand = demand[&(item.product_id, item.color.as_deref())];
+        let stock: i32 = match &item.color {
+            Some(color) => images
+                .iter()
+                .filter(|img| img.color.as_deref() == Some(color.as_str()))
+                .map(|img| img.quantity)
+                .sum(),
+            None => image.quantity,
+        };
+
+        if stock < total_demand {
             return Err(AppError::BadRequest(format!(
                 "Insufficient stock for product {}",
                 item.product_id
             )));
         }
 
-        // Get primary image metadata for snapshot
-        let images =
-            products_queries::find_images_by_product_id(&state.db, item.product_id).await?;
-        let image_json = images.first().map_or(serde_json::Value::Null, |img| {
-            serde_json::json!({
-                "product_id": img.product_id,
-                "image_uuid": img.image_uuid,
-                "color": img.color,
-                "is_primary": img.is_primary,
-                "extension": img.extension,
-            })
-        });
-
-        let discounted_price = if product.discount > Decimal::ZERO {
+        let price = if product.discount > Decimal::ZERO {
             product.price * (Decimal::ONE - product.discount / Decimal::from(100))
         } else {
             product.price
         };
 
-        let item_total = discounted_price * Decimal::from(item.quantity);
-        total_amount += item_total;
+        total_amount += price * Decimal::from(item.quantity);
 
         product_ids.push(item.product_id);
+        colors.push(item.color.clone());
         quantities.push(item.quantity);
-        prices.push(discounted_price);
+        prices.push(price);
         product_names.push(product.name.clone());
-        product_images.push(image_json);
+        item_images.push(serde_json::json!({
+            "product_id": image.product_id,
+            "image_uuid": image.image_uuid,
+            "color": image.color,
+            "is_primary": image.is_primary,
+            "extension": image.extension,
+        }));
     }
 
     let amount_tetri = ((total_amount + DELIVERY_PRICE) * Decimal::from(100))
@@ -109,17 +165,18 @@ pub async fn checkout(
 
     let order_id = format!("tene_{}", Uuid::new_v4());
 
-    let order =
-        order_queries::create_order(&state.db, user_id, &order_id, amount_tetri, &payload).await?;
-
-    order_queries::create_order_items(
+    order_queries::create_order_with_items(
         &state.db,
-        order.id,
+        user_id,
+        &order_id,
+        amount_tetri,
+        &payload,
         &product_ids,
+        &colors,
         &quantities,
         &prices,
         &product_names,
-        &product_images,
+        &item_images,
     )
     .await?;
 
@@ -184,8 +241,12 @@ pub async fn flitt_callback(
             if order_status == "approved" {
                 match order_queries::deduct_stock_for_order(&state.db, order.id).await {
                     Ok(true) => {}
-                    Ok(false) => tracing::warn!("Insufficient stock for approved order {}", order_id),
-                    Err(e) => tracing::error!("Failed to deduct stock for order {}: {:?}", order_id, e),
+                    Ok(false) => {
+                        tracing::warn!("Insufficient stock for approved order {}", order_id)
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to deduct stock for order {}: {:?}", order_id, e)
+                    }
                 }
             }
             StatusCode::OK

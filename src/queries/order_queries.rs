@@ -6,13 +6,21 @@ use crate::{
     models::{CheckoutRequest, Order, OrderItem},
 };
 
-pub async fn create_order(
+pub async fn create_order_with_items(
     pool: &PgPool,
     user_id: i32,
     order_id: &str,
     amount: i32,
     req: &CheckoutRequest,
+    product_ids: &[i32],
+    colors: &[Option<String>],
+    quantities: &[i32],
+    prices: &[Decimal],
+    product_names: &[String],
+    product_images: &[serde_json::Value],
 ) -> Result<Order> {
+    let mut tx = pool.begin().await?;
+
     let (customer_name, customer_surname) = match &req.individual {
         Some(info) => (Some(info.name.as_str()), Some(info.surname.as_str())),
         None => (None, None),
@@ -48,36 +56,25 @@ pub async fn create_order(
     .bind(&req.address)
     .bind(&req.delivery_type)
     .bind(&req.delivery_time)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await?;
 
-    Ok(order)
-}
-
-pub async fn create_order_items(
-    pool: &PgPool,
-    order_db_id: i32,
-    product_ids: &[i32],
-    quantities: &[i32],
-    prices: &[Decimal],
-    product_names: &[String],
-    product_images: &[serde_json::Value],
-) -> Result<Vec<OrderItem>> {
-    let items = sqlx::query_as::<_, OrderItem>(
-        "INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase, product_name, product_image)
-         SELECT $1, unnest($2::int[]), unnest($3::int[]), unnest($4::decimal[]), unnest($5::varchar[]), unnest($6::jsonb[])
-         RETURNING *",
+    sqlx::query(
+        "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image)
+         SELECT $1, unnest($2::int[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[])",
     )
-    .bind(order_db_id)
+    .bind(order.id)
     .bind(product_ids)
+    .bind(colors)
     .bind(quantities)
     .bind(prices)
     .bind(product_names)
     .bind(product_images)
-    .fetch_all(pool)
+    .execute(&mut *tx)
     .await?;
 
-    Ok(items)
+    tx.commit().await?;
+    Ok(order)
 }
 
 pub async fn update_order_status(
@@ -139,19 +136,58 @@ pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result
 }
 
 pub async fn deduct_stock_for_order(pool: &PgPool, order_db_id: i32) -> Result<bool> {
-    // Atomically deduct stock only if all products have sufficient quantity
-    let result = sqlx::query(
-        "UPDATE products SET quantity = products.quantity - oi.quantity, updated_at = NOW()
-         FROM order_items oi
-         WHERE products.id = oi.product_id
-           AND oi.order_id = $1
-           AND products.quantity >= oi.quantity",
+    let mut tx = pool.begin().await?;
+
+    // Get the order items we need to deduct
+    let items = sqlx::query_as::<_, OrderItem>(
+        "SELECT * FROM order_items WHERE order_id = $1",
     )
     .bind(order_db_id)
-    .execute(pool)
+    .fetch_all(&mut *tx)
     .await?;
 
-    // Return false if no rows were updated (insufficient stock)
-    Ok(result.rows_affected() > 0)
+    if items.is_empty() {
+        tx.commit().await?;
+        return Ok(true);
+    }
+
+    // Deduct each item individually so we can verify each one succeeded
+    for item in &items {
+        let result = match &item.color {
+            Some(color) => {
+                // Deduct from the specific color variant
+                sqlx::query(
+                    "UPDATE product_images
+                     SET quantity = quantity - $1
+                     WHERE product_id = $2 AND color = $3 AND quantity >= $1",
+                )
+                .bind(item.quantity)
+                .bind(item.product_id)
+                .bind(color)
+                .execute(&mut *tx)
+                .await?
+            }
+            None => {
+                // No color specified — deduct from the primary image
+                sqlx::query(
+                    "UPDATE product_images
+                     SET quantity = quantity - $1
+                     WHERE product_id = $2 AND is_primary = true AND quantity >= $1",
+                )
+                .bind(item.quantity)
+                .bind(item.product_id)
+                .execute(&mut *tx)
+                .await?
+            }
+        };
+
+        if result.rows_affected() == 0 {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+    }
+
+    tx.commit().await?;
+    Ok(true)
 }
 
