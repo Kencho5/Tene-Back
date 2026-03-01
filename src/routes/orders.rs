@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
-use rust_decimal::{Decimal, dec};
+use rust_decimal::{Decimal, dec, prelude::ToPrimitive};
 use uuid::Uuid;
 
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{CheckoutRequest, CheckoutResponse, OrderResponse},
+    models::{CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
     queries::{order_queries, products_queries},
     services::flitt_service,
     utils::extractors::extract_user_id,
@@ -59,13 +59,7 @@ pub async fn checkout(
         products_queries::find_images_by_product_ids(&state.db, &requested_ids).await?;
 
     let mut total_amount = Decimal::ZERO;
-    let len = payload.items.len();
-    let mut product_ids = Vec::with_capacity(len);
-    let mut colors: Vec<Option<String>> = Vec::with_capacity(len);
-    let mut quantities = Vec::with_capacity(len);
-    let mut prices = Vec::with_capacity(len);
-    let mut product_names = Vec::with_capacity(len);
-    let mut item_images = Vec::with_capacity(len);
+    let mut order_items = Vec::with_capacity(payload.items.len());
 
     for item in &payload.items {
         let product = all_products
@@ -137,25 +131,21 @@ pub async fn checkout(
 
         total_amount += price * Decimal::from(item.quantity);
 
-        product_ids.push(item.product_id);
-        colors.push(item.color.clone());
-        quantities.push(item.quantity);
-        prices.push(price);
-        product_names.push(product.name.clone());
-        item_images.push(serde_json::json!({
-            "product_id": image.product_id,
-            "image_uuid": image.image_uuid,
-            "color": image.color,
-            "is_primary": image.is_primary,
-            "extension": image.extension,
-        }));
+        order_items.push(OrderItemData {
+            product_id: item.product_id,
+            color: item.color.clone(),
+            quantity: item.quantity,
+            price,
+            product_name: product.name.clone(),
+            image: serde_json::to_value(image)
+                .map_err(|e| AppError::InternalError(e.to_string()))?,
+        });
     }
 
     let amount_tetri = ((total_amount + DELIVERY_PRICE) * Decimal::from(100))
         .trunc()
-        .to_string()
-        .parse::<i32>()
-        .map_err(|_| AppError::InternalError("Failed to calculate amount".to_string()))?;
+        .to_i32()
+        .ok_or_else(|| AppError::InternalError("Failed to calculate amount".to_string()))?;
 
     if amount_tetri <= 0 {
         return Err(AppError::BadRequest(
@@ -171,12 +161,7 @@ pub async fn checkout(
         &order_id,
         amount_tetri,
         &payload,
-        &product_ids,
-        &colors,
-        &quantities,
-        &prices,
-        &product_names,
-        &item_images,
+        &order_items,
     )
     .await?;
 
@@ -236,23 +221,22 @@ pub async fn flitt_callback(
         payment_id
     );
 
-    match order_queries::update_order_status(&state.db, order_id, order_status, payment_id).await {
-        Ok(Some(order)) => {
-            if order_status == "approved" {
-                match order_queries::deduct_stock_for_order(&state.db, order.id).await {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        tracing::warn!("Insufficient stock for approved order {}", order_id)
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to deduct stock for order {}: {:?}", order_id, e)
-                    }
-                }
+    match order_queries::update_order_status_and_deduct_stock(
+        &state.db,
+        order_id,
+        order_status,
+        payment_id,
+    )
+    .await
+    {
+        Ok(Some((_order, stock_ok))) => {
+            if !stock_ok {
+                tracing::warn!("Insufficient stock for approved order {}", order_id);
             }
             StatusCode::OK
         }
         Ok(None) => {
-            tracing::warn!("Flitt callback: order {} not found", order_id);
+            tracing::warn!("Flitt callback: order {} not found or already processed", order_id);
             StatusCode::OK
         }
         Err(e) => {

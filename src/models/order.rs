@@ -52,16 +52,17 @@ pub struct OrderResponse {
 // Request types
 
 #[derive(Debug, Deserialize)]
-pub struct IndividualInfo {
-    pub name: String,
-    pub surname: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CompanyInfo {
-    pub organization_type: String,
-    pub organization_name: String,
-    pub organization_code: String,
+#[serde(tag = "customer_type", rename_all = "snake_case")]
+pub enum CustomerInfo {
+    Individual {
+        name: String,
+        surname: String,
+    },
+    Company {
+        organization_type: String,
+        organization_name: String,
+        organization_code: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,15 +74,25 @@ pub struct CartItem {
 
 #[derive(Debug, Deserialize)]
 pub struct CheckoutRequest {
-    pub customer_type: String,
-    pub individual: Option<IndividualInfo>,
-    pub company: Option<CompanyInfo>,
+    #[serde(flatten)]
+    pub customer: CustomerInfo,
     pub email: String,
     pub phone_number: i64,
     pub address: String,
     pub delivery_type: String,
     pub delivery_time: String,
     pub items: Vec<CartItem>,
+}
+
+// Internal types
+
+pub struct OrderItemData {
+    pub product_id: i32,
+    pub color: Option<String>,
+    pub quantity: i32,
+    pub price: Decimal,
+    pub product_name: String,
+    pub image: serde_json::Value,
 }
 
 // Response types
