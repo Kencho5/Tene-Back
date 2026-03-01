@@ -118,7 +118,7 @@ pub async fn update_order_checkout_url(
 
 pub async fn get_user_orders(pool: &PgPool, user_id: i32) -> Result<Vec<Order>> {
     let orders = sqlx::query_as::<_, Order>(
-        "SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC",
+        "SELECT * FROM orders WHERE user_id = $1 AND status != 'pending' ORDER BY created_at DESC",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -128,12 +128,11 @@ pub async fn get_user_orders(pool: &PgPool, user_id: i32) -> Result<Vec<Order>> 
 }
 
 pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result<Vec<OrderItem>> {
-    let items = sqlx::query_as::<_, OrderItem>(
-        "SELECT * FROM order_items WHERE order_id = ANY($1)",
-    )
-    .bind(order_db_ids)
-    .fetch_all(pool)
-    .await?;
+    let items =
+        sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = ANY($1)")
+            .bind(order_db_ids)
+            .fetch_all(pool)
+            .await?;
 
     Ok(items)
 }
