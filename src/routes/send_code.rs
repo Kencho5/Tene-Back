@@ -38,7 +38,7 @@ pub async fn verify_code(
     let verification = email_queries::find_valid_code(&state.db, &payload.email, payload.code)
         .await?
         .ok_or_else(|| {
-            AppError::Unauthorized("Invalid or expired verification code".to_string())
+            AppError::Unauthorized("არასწორი ან ვადაგასული დამადასტურებელი კოდი".to_string())
         })?;
 
     email_queries::delete_code(&state.db, verification.id).await?;
@@ -50,7 +50,7 @@ pub async fn verify_code(
 
 fn validate_email(email: &str) -> Result<()> {
     if email.is_empty() || !email.contains('@') {
-        return Err(AppError::BadRequest("Invalid email address".to_string()));
+        return Err(AppError::BadRequest("არასწორი ელფოსტის მისამართი".to_string()));
     }
     Ok(())
 }

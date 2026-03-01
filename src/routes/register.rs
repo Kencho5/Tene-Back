@@ -18,11 +18,11 @@ pub async fn register_user(
         .await?
         .is_some()
     {
-        return Err(AppError::Conflict("Email already registered".to_string()));
+        return Err(AppError::Conflict("ელფოსტა უკვე რეგისტრირებულია".to_string()));
     }
 
     let password_hash = bcrypt::hash(&payload.password, bcrypt::DEFAULT_COST)
-        .map_err(|e| AppError::InternalError(format!("Password hashing failed: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("პაროლის ჰეშირება ვერ მოხერხდა: {}", e)))?;
 
     let user =
         user_queries::create_user(&state.db, &payload.email, &payload.name, &password_hash).await?;
@@ -34,16 +34,16 @@ pub async fn register_user(
 
 fn validate_registration(payload: &RegisterRequest) -> Result<()> {
     if payload.email.is_empty() || !payload.email.contains('@') {
-        return Err(AppError::BadRequest("Invalid email address".to_string()));
+        return Err(AppError::BadRequest("არასწორი ელფოსტის მისამართი".to_string()));
     }
 
     if payload.name.trim().is_empty() {
-        return Err(AppError::BadRequest("Name cannot be empty".to_string()));
+        return Err(AppError::BadRequest("სახელი არ შეიძლება იყოს ცარიელი".to_string()));
     }
 
     if payload.password.len() < 4 {
         return Err(AppError::BadRequest(
-            "Password must be at least 4 characters".to_string(),
+            "პაროლი უნდა შეიცავდეს მინიმუმ 4 სიმბოლოს".to_string(),
         ));
     }
 

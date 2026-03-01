@@ -46,7 +46,7 @@ pub async fn edit_address(
 
     let address = edit_user_address(&state.db, user_id, address_id, payload)
         .await?
-        .ok_or(AppError::NotFound("Address not found".to_string()))?;
+        .ok_or(AppError::NotFound("მისამართი ვერ მოიძებნა".to_string()))?;
 
     Ok(Json(address))
 }
@@ -60,7 +60,7 @@ pub async fn delete_address(
 
     let address = delete_user_address(&state.db, user_id, address_id)
         .await?
-        .ok_or(AppError::NotFound("Address not found".to_string()))?;
+        .ok_or(AppError::NotFound("მისამართი ვერ მოიძებნა".to_string()))?;
 
     Ok(Json(address))
 }

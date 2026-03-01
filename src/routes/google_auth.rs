@@ -21,17 +21,17 @@ pub async fn google_auth(
     let payload_result = client
         .validate_id_token(&payload.id_token)
         .await
-        .map_err(|e| AppError::BadRequest(format!("Invalid Google token: {}", e)))?;
+        .map_err(|e| AppError::BadRequest(format!("არასწორი Google ტოკენი: {}", e)))?;
 
     let google_id = &payload_result.sub;
     let email = payload_result
         .email
         .as_ref()
-        .ok_or_else(|| AppError::BadRequest("Email not provided by Google".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest("ელფოსტა არ არის მოწოდებული Google-დან".to_string()))?;
     let name = payload_result
         .name
         .as_ref()
-        .ok_or_else(|| AppError::BadRequest("Name not provided by Google".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest("სახელი არ არის მოწოდებული Google-დან".to_string()))?;
 
     let user =
         if let Some(existing_user) = user_queries::find_by_google_id(&state.db, google_id).await? {
@@ -39,7 +39,7 @@ pub async fn google_auth(
         } else if let Some(existing_user) = user_queries::find_by_email(&state.db, email).await? {
             if existing_user.password.is_some() {
                 return Err(AppError::Conflict(
-                    "Email already registered with password. Please login with email/password"
+                    "ელფოსტა უკვე რეგისტრირებულია პაროლით. გთხოვთ შეხვიდეთ ელფოსტით/პაროლით"
                         .to_string(),
                 ));
             }

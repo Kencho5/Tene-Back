@@ -19,13 +19,13 @@ pub async fn send_verification_email(
         .data("Verify Your Email")
         .charset("UTF-8")
         .build()
-        .map_err(|e| AppError::InternalError(format!("Failed to build subject: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("სათაურის აგება ვერ მოხერხდა: {}", e)))?;
 
     let html_body = aws_sdk_sesv2::types::Content::builder()
         .data(html)
         .charset("UTF-8")
         .build()
-        .map_err(|e| AppError::InternalError(format!("Failed to build HTML body: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("HTML ტექსტის აგება ვერ მოხერხდა: {}", e)))?;
 
     let body = aws_sdk_sesv2::types::Body::builder()
         .html(html_body)
@@ -49,7 +49,7 @@ pub async fn send_verification_email(
         .await
         .map_err(|e| {
             tracing::error!("Failed to send email: {:?}", e);
-            AppError::InternalError("Failed to send verification email".to_string())
+            AppError::InternalError("დამადასტურებელი ელფოსტის გაგზავნა ვერ მოხერხდა".to_string())
         })?;
 
     Ok(())

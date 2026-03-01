@@ -103,16 +103,16 @@ pub async fn create_checkout_url(
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| AppError::InternalError(format!("Flitt API request failed: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("Flitt API მოთხოვნა ვერ მოხერხდა: {}", e)))?;
 
     let body: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| AppError::InternalError(format!("Failed to parse Flitt response: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("Flitt პასუხის გარჩევა ვერ მოხერხდა: {}", e)))?;
 
     let response_obj = body
         .get("response")
-        .ok_or_else(|| AppError::InternalError("Invalid Flitt response format".to_string()))?;
+        .ok_or_else(|| AppError::InternalError("არასწორი Flitt პასუხის ფორმატი".to_string()))?;
 
     let response_status = response_obj
         .get("response_status")
@@ -126,7 +126,7 @@ pub async fn create_checkout_url(
             .and_then(|v| v.as_str())
             .unwrap_or("Unknown Flitt error");
         return Err(AppError::InternalError(format!(
-            "Flitt order creation failed: {}",
+            "Flitt შეკვეთის შექმნა ვერ მოხერხდა: {}",
             error_message
         )));
     }
@@ -135,7 +135,7 @@ pub async fn create_checkout_url(
         .get("checkout_url")
         .and_then(|v| v.as_str())
         .ok_or_else(|| {
-            AppError::InternalError("Flitt response missing checkout_url".to_string())
+            AppError::InternalError("Flitt პასუხში checkout_url აკლია".to_string())
         })?;
 
     Ok(checkout_url.to_string())

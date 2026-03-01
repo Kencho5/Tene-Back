@@ -21,19 +21,19 @@ pub async fn create_product(
 ) -> Result<Json<ProductResponse>> {
     let id = payload
         .id
-        .ok_or_else(|| AppError::BadRequest("id is required".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest("id აუცილებელია".to_string()))?;
 
     if payload.name.is_none() {
-        return Err(AppError::BadRequest("name is required".to_string()));
+        return Err(AppError::BadRequest("სახელი აუცილებელია".to_string()));
     }
 
     if payload.price.is_none() {
-        return Err(AppError::BadRequest("price is required".to_string()));
+        return Err(AppError::BadRequest("ფასი აუცილებელია".to_string()));
     }
 
     if products_queries::find_by_id(&state.db, id).await?.is_some() {
         return Err(AppError::Conflict(format!(
-            "Product with id {} already exists",
+            "პროდუქტი id-ით {} უკვე არსებობს",
             id
         )));
     }
@@ -56,7 +56,7 @@ pub async fn update_product(
 ) -> Result<Json<ProductResponse>> {
     if products_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
-            "Product with id {} not found",
+            "პროდუქტი id-ით {} ვერ მოიძებნა",
             id
         )));
     }
@@ -77,7 +77,7 @@ pub async fn delete_product(
     Path(id): Path<i32>,
 ) -> Result<StatusCode> {
     if products_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound("Product not found".to_string()));
+        return Err(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()));
     }
 
     let env_prefix = match state.environment {
@@ -89,7 +89,7 @@ pub async fn delete_product(
 
     delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &s3_prefix)
         .await
-        .map_err(|e| AppError::InternalError(format!("Failed to delete images from S3: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან სურათების წაშლა ვერ მოხერხდა: {}", e)))?;
 
     admin_queries::delete_product(&state.db, id).await?;
 
@@ -126,7 +126,7 @@ pub async fn generate_product_urls(
             900,
         )
         .await
-        .map_err(|e| AppError::InternalError(format!("Failed to generate presigned URL: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {}", e)))?;
 
         let public_url = format!("{}/{}", state.assets_url, key);
 
@@ -159,7 +159,7 @@ pub async fn delete_product_image(
         .await?
         .ok_or_else(|| {
             AppError::NotFound(format!(
-                "Image {} not found for product {}",
+                "სურათი {} ვერ მოიძებნა პროდუქტისთვის {}",
                 image_uuid, product_id
             ))
         })?;
@@ -176,7 +176,7 @@ pub async fn delete_product_image(
 
     delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
-        .map_err(|e| AppError::InternalError(format!("Failed to delete image from S3: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან სურათის წაშლა ვერ მოხერხდა: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -188,7 +188,7 @@ pub async fn update_product_image_metadata(
 ) -> Result<Json<ProductImage>> {
     if payload.color.is_none() && payload.is_primary.is_none() && payload.quantity.is_none() {
         return Err(AppError::BadRequest(
-            "At least one field (color, is_primary, or quantity) must be provided".to_string(),
+            "მინიმუმ ერთი ველი (ფერი, is_primary ან რაოდენობა) უნდა იყოს მითითებული".to_string(),
         ));
     }
 
@@ -203,7 +203,7 @@ pub async fn update_product_image_metadata(
     .await?
     .ok_or_else(|| {
         AppError::NotFound(format!(
-            "Image {} not found for product {}",
+            "სურათი {} ვერ მოიძებნა პროდუქტისთვის {}",
             image_uuid, product_id
         ))
     })?;
@@ -236,7 +236,7 @@ pub async fn update_user(
     Json(payload): Json<UserRequest>,
 ) -> Result<Json<UserResponse>> {
     if user_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("User with id {} not found", id)));
+        return Err(AppError::NotFound(format!("მომხმარებელი id-ით {} ვერ მოიძებნა", id)));
     }
 
     let user = admin_queries::update_user(&state.db, id, &payload).await?;
@@ -246,7 +246,7 @@ pub async fn update_user(
 
 pub async fn delete_user(State(state): State<AppState>, Path(id): Path<i32>) -> Result<StatusCode> {
     if user_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("User with id {} not found", id)));
+        return Err(AppError::NotFound(format!("მომხმარებელი id-ით {} ვერ მოიძებნა", id)));
     }
 
     admin_queries::delete_user(&state.db, id).await?;
@@ -351,7 +351,7 @@ pub async fn get_category(
     let category = category_queries::find_by_id(&state.db, id)
         .await?
         .ok_or(AppError::NotFound(format!(
-            "Category with id {} not found",
+            "კატეგორია id-ით {} ვერ მოიძებნა",
             id
         )))?;
 
@@ -384,7 +384,7 @@ pub async fn create_category(
         .is_some()
     {
         return Err(AppError::Conflict(format!(
-            "Category with slug '{}' already exists",
+            "კატეგორია slug-ით '{}' უკვე არსებობს",
             payload.slug
         )));
     }
@@ -395,7 +395,7 @@ pub async fn create_category(
             .is_none()
         {
             return Err(AppError::NotFound(format!(
-                "Parent category with id {} not found",
+                "მშობელი კატეგორია id-ით {} ვერ მოიძებნა",
                 parent_id
             )));
         }
@@ -412,7 +412,7 @@ pub async fn update_category(
 ) -> Result<Json<Category>> {
     if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
-            "Category with id {} not found",
+            "კატეგორია id-ით {} ვერ მოიძებნა",
             id
         )));
     }
@@ -421,7 +421,7 @@ pub async fn update_category(
         if let Some(existing) = category_queries::find_by_slug(&state.db, new_slug).await? {
             if existing.id != id {
                 return Err(AppError::Conflict(format!(
-                    "Another category with slug '{}' already exists",
+                    "სხვა კატეგორია slug-ით '{}' უკვე არსებობს",
                     new_slug
                 )));
             }
@@ -431,7 +431,7 @@ pub async fn update_category(
     if let Some(parent_id) = payload.parent_id {
         if parent_id == id {
             return Err(AppError::BadRequest(
-                "Category cannot be its own parent".to_string(),
+                "კატეგორია არ შეიძლება იყოს საკუთარი მშობელი".to_string(),
             ));
         }
         if category_queries::find_by_id(&state.db, parent_id)
@@ -439,7 +439,7 @@ pub async fn update_category(
             .is_none()
         {
             return Err(AppError::NotFound(format!(
-                "Parent category with id {} not found",
+                "მშობელი კატეგორია id-ით {} ვერ მოიძებნა",
                 parent_id
             )));
         }
@@ -448,7 +448,7 @@ pub async fn update_category(
     let category = category_queries::update_category(&state.db, id, payload)
         .await?
         .ok_or(AppError::NotFound(format!(
-            "Category with id {} not found",
+            "კატეგორია id-ით {} ვერ მოიძებნა",
             id
         )))?;
 
@@ -461,7 +461,7 @@ pub async fn delete_category(
 ) -> Result<StatusCode> {
     if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
-            "Category with id {} not found",
+            "კატეგორია id-ით {} ვერ მოიძებნა",
             id
         )));
     }
@@ -485,7 +485,7 @@ pub async fn assign_categories_to_product(
         .is_none()
     {
         return Err(AppError::NotFound(format!(
-            "Product with id {} not found",
+            "პროდუქტი id-ით {} ვერ მოიძებნა",
             product_id
         )));
     }
@@ -496,7 +496,7 @@ pub async fn assign_categories_to_product(
             .is_none()
         {
             return Err(AppError::NotFound(format!(
-                "Category with id {} not found",
+                "კატეგორია id-ით {} ვერ მოიძებნა",
                 category_id
             )));
         }
@@ -516,7 +516,7 @@ pub async fn generate_category_image_url(
     // Check if category exists
     if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
-            "Category with id {} not found",
+            "კატეგორია id-ით {} ვერ მოიძებნა",
             id
         )));
     }
@@ -544,7 +544,7 @@ pub async fn generate_category_image_url(
         900,
     )
     .await
-    .map_err(|e| AppError::InternalError(format!("Failed to generate presigned URL: {}", e)))?;
+    .map_err(|e| AppError::InternalError(format!("წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {}", e)))?;
 
     let public_url = format!("{}/{}", state.assets_url, key);
 
@@ -564,7 +564,7 @@ pub async fn delete_category_image(
     // Check if category exists
     if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
-            "Category with id {} not found",
+            "კატეგორია id-ით {} ვერ მოიძებნა",
             id
         )));
     }
@@ -572,10 +572,10 @@ pub async fn delete_category_image(
     // Get the image to find its extension
     let image = category_queries::get_category_image(&state.db, id)
         .await?
-        .ok_or(AppError::NotFound("Category image not found".to_string()))?;
+        .ok_or(AppError::NotFound("კატეგორიის სურათი ვერ მოიძებნა".to_string()))?;
 
     if image.image_uuid != image_uuid {
-        return Err(AppError::NotFound("Category image not found".to_string()));
+        return Err(AppError::NotFound("კატეგორიის სურათი ვერ მოიძებნა".to_string()));
     }
 
     let env_prefix = match state.environment {
@@ -587,7 +587,7 @@ pub async fn delete_category_image(
 
     delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
-        .map_err(|e| AppError::InternalError(format!("Failed to delete image from S3: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან სურათის წაშლა ვერ მოხერხდა: {}", e)))?;
 
     category_queries::delete_category_image(&state.db, id, image_uuid).await?;
 
@@ -609,7 +609,7 @@ pub async fn create_brand(
         .is_some()
     {
         return Err(AppError::Conflict(format!(
-            "Brand '{}' already exists",
+            "ბრენდი '{}' უკვე არსებობს",
             payload.name
         )));
     }
@@ -627,13 +627,13 @@ pub async fn update_brand(
         .await?
         .is_none()
     {
-        return Err(AppError::NotFound(format!("Brand with id {} not found", id)));
+        return Err(AppError::NotFound(format!("ბრენდი id-ით {} ვერ მოიძებნა", id)));
     }
 
     if let Some(existing) = admin_queries::find_brand_by_name(&state.db, &payload.name).await? {
         if existing.id != id {
             return Err(AppError::Conflict(format!(
-                "Brand '{}' already exists",
+                "ბრენდი '{}' უკვე არსებობს",
                 payload.name
             )));
         }
@@ -651,7 +651,7 @@ pub async fn delete_brand(
         .await?
         .is_none()
     {
-        return Err(AppError::NotFound(format!("Brand with id {} not found", id)));
+        return Err(AppError::NotFound(format!("ბრენდი id-ით {} ვერ მოიძებნა", id)));
     }
 
     admin_queries::delete_brand(&state.db, id).await?;

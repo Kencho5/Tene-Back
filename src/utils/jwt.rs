@@ -21,7 +21,7 @@ pub fn generate_token(user_id: i32, email: &str, name: &str, role: UserRole) -> 
 
     let expiration = chrono::Utc::now()
         .checked_add_signed(chrono::Duration::days(30))
-        .ok_or_else(|| AppError::InternalError("Failed to calculate expiration".to_string()))?
+        .ok_or_else(|| AppError::InternalError("ვადის გამოთვლა ვერ მოხერხდა".to_string()))?
         .timestamp() as usize;
 
     let claims = Claims {
@@ -38,7 +38,7 @@ pub fn generate_token(user_id: i32, email: &str, name: &str, role: UserRole) -> 
         &claims,
         &EncodingKey::from_secret(jwt_secret.as_bytes()),
     )
-    .map_err(|e| AppError::InternalError(format!("Token generation failed: {}", e)))
+    .map_err(|e| AppError::InternalError(format!("ტოკენის გენერაცია ვერ მოხერხდა: {}", e)))
 }
 
 pub fn verify_token(token: &str) -> Result<Claims> {
@@ -51,5 +51,5 @@ pub fn verify_token(token: &str) -> Result<Claims> {
         &Validation::default(),
     )
     .map(|data| data.claims)
-    .map_err(|e| AppError::BadRequest(format!("Invalid token: {}", e)))
+    .map_err(|e| AppError::BadRequest(format!("არასწორი ტოკენი: {}", e)))
 }

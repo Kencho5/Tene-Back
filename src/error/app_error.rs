@@ -52,13 +52,13 @@ impl IntoResponse for AppError {
         let (status, error_message) = match self {
             AppError::DatabaseError(ref e) => {
                 tracing::error!("Database error: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database error occurred")
+                (StatusCode::INTERNAL_SERVER_ERROR, "მონაცემთა ბაზის შეცდომა")
             }
             AppError::ConfigError(ref msg) => {
                 tracing::error!("Configuration error: {}", msg);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "Server configuration error",
+                    "სერვერის კონფიგურაციის შეცდომა",
                 )
             }
             AppError::InternalError(ref msg) => {

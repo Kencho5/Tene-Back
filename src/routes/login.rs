@@ -14,19 +14,19 @@ pub async fn login_user(
 ) -> Result<Json<AuthResponse>> {
     let user = user_queries::find_by_email(&state.db, &payload.email)
         .await?
-        .ok_or_else(|| AppError::Unauthorized("Invalid email or password".to_string()))?;
+        .ok_or_else(|| AppError::Unauthorized("არასწორი ელფოსტა ან პაროლი".to_string()))?;
 
     let password_hash = user
         .password
         .as_ref()
-        .ok_or_else(|| AppError::Unauthorized("Invalid email or password".to_string()))?;
+        .ok_or_else(|| AppError::Unauthorized("არასწორი ელფოსტა ან პაროლი".to_string()))?;
 
     let is_valid = bcrypt::verify(&payload.password, password_hash)
-        .map_err(|e| AppError::InternalError(format!("Password verification failed: {}", e)))?;
+        .map_err(|e| AppError::InternalError(format!("პაროლის შემოწმება ვერ მოხერხდა: {}", e)))?;
 
     if !is_valid {
         return Err(AppError::Unauthorized(
-            "Invalid email or password".to_string(),
+            "არასწორი ელფოსტა ან პაროლი".to_string(),
         ));
     }
 

@@ -24,21 +24,21 @@ pub async fn checkout(
     let user_id = extract_user_id(&claims)?;
 
     if payload.items.is_empty() {
-        return Err(AppError::BadRequest("Cart is empty".to_string()));
+        return Err(AppError::BadRequest("კალათა ცარიელია".to_string()));
     }
 
     if payload.email.is_empty() || !payload.email.contains('@') {
-        return Err(AppError::BadRequest("Invalid email".to_string()));
+        return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
     }
 
     if payload.address.is_empty() {
-        return Err(AppError::BadRequest("Address is required".to_string()));
+        return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
     }
 
     for item in &payload.items {
         if item.quantity <= 0 {
             return Err(AppError::BadRequest(format!(
-                "Invalid quantity for product {}",
+                "არასწორი რაოდენობა პროდუქტისთვის {}",
                 item.product_id
             )));
         }
@@ -64,11 +64,11 @@ pub async fn checkout(
     for item in &payload.items {
         let product = all_products
             .get(&item.product_id)
-            .ok_or_else(|| AppError::NotFound(format!("Product {} not found", item.product_id)))?;
+            .ok_or_else(|| AppError::NotFound(format!("პროდუქტი {} ვერ მოიძებნა", item.product_id)))?;
 
         if !product.enabled {
             return Err(AppError::BadRequest(format!(
-                "Product {} is not available",
+                "პროდუქტი {} მიუწვდომელია",
                 item.product_id
             )));
         }
@@ -86,7 +86,7 @@ pub async fn checkout(
 
         if distinct_colors.len() > 1 && item.color.is_none() {
             return Err(AppError::BadRequest(format!(
-                "Color is required for product {}",
+                "ფერი აუცილებელია პროდუქტისთვის {}",
                 item.product_id
             )));
         }
@@ -100,7 +100,7 @@ pub async fn checkout(
         }
         .ok_or_else(|| {
             AppError::BadRequest(format!(
-                "Color not available for product {}",
+                "ფერი მიუწვდომელია პროდუქტისთვის {}",
                 item.product_id
             ))
         })?;
@@ -118,7 +118,7 @@ pub async fn checkout(
 
         if stock < total_demand {
             return Err(AppError::BadRequest(format!(
-                "Insufficient stock for product {}",
+                "არასაკმარისი მარაგი პროდუქტისთვის {}",
                 item.product_id
             )));
         }
@@ -145,11 +145,11 @@ pub async fn checkout(
     let amount_tetri = ((total_amount + DELIVERY_PRICE) * Decimal::from(100))
         .trunc()
         .to_i32()
-        .ok_or_else(|| AppError::InternalError("Failed to calculate amount".to_string()))?;
+        .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
 
     if amount_tetri <= 0 {
         return Err(AppError::BadRequest(
-            "Order amount must be positive".to_string(),
+            "შეკვეთის თანხა უნდა იყოს დადებითი".to_string(),
         ));
     }
 
