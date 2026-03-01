@@ -123,8 +123,6 @@ pub async fn checkout(
     )
     .await?;
 
-    order_queries::deduct_stock(&state.db, &product_ids, &quantities).await?;
-
     let server_callback_url = format!("{}/payments/callback", state.backend_url);
     let response_url = format!("{}/checkout/result", state.frontend_url);
 
@@ -183,9 +181,11 @@ pub async fn flitt_callback(
 
     match order_queries::update_order_status(&state.db, order_id, order_status, payment_id).await {
         Ok(Some(order)) => {
-            if order_status == "declined" || order_status == "expired" {
-                if let Err(e) = order_queries::restore_stock(&state.db, order.id).await {
-                    tracing::error!("Failed to restore stock for order {}: {:?}", order_id, e);
+            if order_status == "approved" {
+                match order_queries::deduct_stock_for_order(&state.db, order.id).await {
+                    Ok(true) => {}
+                    Ok(false) => tracing::warn!("Insufficient stock for approved order {}", order_id),
+                    Err(e) => tracing::error!("Failed to deduct stock for order {}: {:?}", order_id, e),
                 }
             }
             StatusCode::OK

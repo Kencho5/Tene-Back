@@ -86,9 +86,10 @@ pub async fn update_order_status(
     status: &str,
     payment_id: Option<i32>,
 ) -> Result<Option<Order>> {
+    // Only update if still pending - prevents double-processing repeated callbacks
     let order = sqlx::query_as::<_, Order>(
         "UPDATE orders SET status = $1, payment_id = $2, updated_at = NOW()
-         WHERE order_id = $3 RETURNING *",
+         WHERE order_id = $3 AND status = 'pending' RETURNING *",
     )
     .bind(status)
     .bind(payment_id)
@@ -137,29 +138,20 @@ pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result
     Ok(items)
 }
 
-pub async fn deduct_stock(pool: &PgPool, product_ids: &[i32], quantities: &[i32]) -> Result<()> {
-    sqlx::query(
-        "UPDATE products SET quantity = quantity - d.qty, updated_at = NOW()
-         FROM unnest($1::int[], $2::int[]) AS d(pid, qty)
-         WHERE products.id = d.pid",
-    )
-    .bind(product_ids)
-    .bind(quantities)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn restore_stock(pool: &PgPool, order_db_id: i32) -> Result<()> {
-    sqlx::query(
-        "UPDATE products SET quantity = quantity + oi.quantity, updated_at = NOW()
+pub async fn deduct_stock_for_order(pool: &PgPool, order_db_id: i32) -> Result<bool> {
+    // Atomically deduct stock only if all products have sufficient quantity
+    let result = sqlx::query(
+        "UPDATE products SET quantity = quantity - oi.quantity, updated_at = NOW()
          FROM order_items oi
-         WHERE products.id = oi.product_id AND oi.order_id = $1",
+         WHERE products.id = oi.product_id
+           AND oi.order_id = $1
+           AND products.quantity >= oi.quantity",
     )
     .bind(order_db_id)
     .execute(pool)
     .await?;
 
-    Ok(())
+    // Return false if no rows were updated (insufficient stock)
+    Ok(result.rows_affected() > 0)
 }
+
