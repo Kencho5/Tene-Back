@@ -141,7 +141,7 @@ pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result
 pub async fn deduct_stock_for_order(pool: &PgPool, order_db_id: i32) -> Result<bool> {
     // Atomically deduct stock only if all products have sufficient quantity
     let result = sqlx::query(
-        "UPDATE products SET quantity = quantity - oi.quantity, updated_at = NOW()
+        "UPDATE products SET quantity = products.quantity - oi.quantity, updated_at = NOW()
          FROM order_items oi
          WHERE products.id = oi.product_id
            AND oi.order_id = $1
