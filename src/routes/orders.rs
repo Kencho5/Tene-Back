@@ -1,5 +1,5 @@
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, dec};
 use uuid::Uuid;
 
 use crate::{
@@ -11,6 +11,8 @@ use crate::{
     utils::extractors::extract_user_id,
     utils::jwt::Claims,
 };
+
+const DELIVERY_PRICE: Decimal = dec!(5);
 
 pub async fn checkout(
     State(state): State<AppState>,
@@ -93,7 +95,7 @@ pub async fn checkout(
         product_images.push(image_json);
     }
 
-    let amount_tetri = (total_amount * Decimal::from(100))
+    let amount_tetri = ((total_amount + DELIVERY_PRICE) * Decimal::from(100))
         .trunc()
         .to_string()
         .parse::<i32>()
