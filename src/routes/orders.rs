@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use axum::{
     Extension, Json,
-    extract::{Form, State},
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
@@ -253,7 +253,7 @@ pub async fn flitt_callback(
 
 pub async fn payment_redirect(
     State(state): State<AppState>,
-    Form(params): Form<HashMap<String, String>>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> Redirect {
     let order_id = params.get("order_id").cloned().unwrap_or_default();
     let order_status = params.get("order_status").cloned().unwrap_or_default();
