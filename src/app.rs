@@ -57,6 +57,7 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
             Method::GET,
             Method::POST,
             Method::PUT,
+            Method::PATCH,
             Method::OPTIONS,
             Method::DELETE,
         ])
