@@ -171,6 +171,10 @@ pub async fn search_products(
         query_builder.push_bind(enabled);
     }
 
+    if params.in_stock == Some(true) {
+        query_builder.push(" AND p.quantity > 0");
+    }
+
     if let Some(q) = &params.query {
         let like_q = format!("%{}%", escape_like(q));
         query_builder.push(" AND (p.name ILIKE ");

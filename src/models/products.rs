@@ -78,6 +78,7 @@ pub struct ProductQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
     pub enabled: Option<bool>,
+    pub in_stock: Option<bool>,
 }
 
 fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>

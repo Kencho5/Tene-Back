@@ -261,7 +261,7 @@ pub async fn payment_redirect(
         "{}/checkout/result?order_id={}&order_status={}",
         state.frontend_url, order_id, order_status
     );
-    Redirect::temporary(&target)
+    Redirect::to(&target)
 }
 
 pub async fn get_orders(
