@@ -1,6 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
-use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{
+    Extension, Json,
+    extract::{Form, State},
+    http::StatusCode,
+    response::{IntoResponse, Redirect},
+};
 use rust_decimal::{Decimal, dec, prelude::ToPrimitive};
 use uuid::Uuid;
 
@@ -166,7 +171,7 @@ pub async fn checkout(
     .await?;
 
     let server_callback_url = format!("{}/payments/callback", state.backend_url);
-    let response_url = format!("{}/checkout/result", state.frontend_url);
+    let response_url = format!("{}/payments/redirect", state.backend_url);
 
     let checkout_url = flitt_service::create_checkout_url(
         state.flitt_merchant_id,
@@ -244,6 +249,19 @@ pub async fn flitt_callback(
             StatusCode::INTERNAL_SERVER_ERROR
         }
     }
+}
+
+pub async fn payment_redirect(
+    State(state): State<AppState>,
+    Form(params): Form<HashMap<String, String>>,
+) -> Redirect {
+    let order_id = params.get("order_id").cloned().unwrap_or_default();
+    let order_status = params.get("order_status").cloned().unwrap_or_default();
+    let target = format!(
+        "{}/checkout/result?order_id={}&order_status={}",
+        state.frontend_url, order_id, order_status
+    );
+    Redirect::temporary(&target)
 }
 
 pub async fn get_orders(

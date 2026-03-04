@@ -25,10 +25,7 @@ pub fn generate_signature(secret_key: &str, params: &BTreeMap<String, String>) -
     sig
 }
 
-pub fn verify_callback_signature(
-    secret_key: &str,
-    params: &serde_json::Value,
-) -> bool {
+pub fn verify_callback_signature(secret_key: &str, params: &serde_json::Value) -> bool {
     let obj = match params.as_object() {
         Some(obj) => obj,
         None => return false,
@@ -105,10 +102,9 @@ pub async fn create_checkout_url(
         .await
         .map_err(|e| AppError::InternalError(format!("Flitt API მოთხოვნა ვერ მოხერხდა: {}", e)))?;
 
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| AppError::InternalError(format!("Flitt პასუხის გარჩევა ვერ მოხერხდა: {}", e)))?;
+    let body: serde_json::Value = response.json().await.map_err(|e| {
+        AppError::InternalError(format!("Flitt პასუხის გარჩევა ვერ მოხერხდა: {}", e))
+    })?;
 
     let response_obj = body
         .get("response")
@@ -134,9 +130,7 @@ pub async fn create_checkout_url(
     let checkout_url = response_obj
         .get("checkout_url")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            AppError::InternalError("Flitt პასუხში checkout_url აკლია".to_string())
-        })?;
+        .ok_or_else(|| AppError::InternalError("Flitt პასუხში checkout_url აკლია".to_string()))?;
 
     Ok(checkout_url.to_string())
 }
