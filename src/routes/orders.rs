@@ -67,9 +67,9 @@ pub async fn checkout(
     let mut order_items = Vec::with_capacity(payload.items.len());
 
     for item in &payload.items {
-        let product = all_products
-            .get(&item.product_id)
-            .ok_or_else(|| AppError::NotFound(format!("პროდუქტი {} ვერ მოიძებნა", item.product_id)))?;
+        let product = all_products.get(&item.product_id).ok_or_else(|| {
+            AppError::NotFound(format!("პროდუქტი {} ვერ მოიძებნა", item.product_id))
+        })?;
 
         if !product.enabled {
             return Err(AppError::BadRequest(format!(
@@ -241,7 +241,10 @@ pub async fn flitt_callback(
             StatusCode::OK
         }
         Ok(None) => {
-            tracing::warn!("Flitt callback: order {} not found or already processed", order_id);
+            tracing::warn!(
+                "Flitt callback: order {} not found or already processed",
+                order_id
+            );
             StatusCode::OK
         }
         Err(e) => {

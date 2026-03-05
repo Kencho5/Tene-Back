@@ -243,15 +243,17 @@ pub async fn search_products(
         query_builder.push(" AND false");
     }
 
-    query_builder.push(" ORDER BY relevance_score DESC");
-
     match params.sort_by {
-        Some(SortBy::PriceAsc) => query_builder.push(", p.price ASC"),
-        Some(SortBy::PriceDesc) => query_builder.push(", p.price DESC"),
-        None => &mut query_builder,
+        Some(SortBy::PriceAsc) => {
+            query_builder.push(" ORDER BY p.price ASC, relevance_score DESC, p.created_at DESC");
+        }
+        Some(SortBy::PriceDesc) => {
+            query_builder.push(" ORDER BY p.price DESC, relevance_score DESC, p.created_at DESC");
+        }
+        None => {
+            query_builder.push(" ORDER BY relevance_score DESC, p.created_at DESC");
+        }
     };
-
-    query_builder.push(", p.created_at DESC");
 
     query_builder.push(" LIMIT ");
     query_builder.push_bind(limit);
