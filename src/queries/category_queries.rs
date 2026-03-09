@@ -246,26 +246,28 @@ pub async fn get_category_facets(
     let query = if enabled_products_only {
         "SELECT
             c.id,
+            c.parent_id,
             c.name,
             COUNT(DISTINCT p.id)::bigint as count
          FROM categories c
          INNER JOIN product_categories pc ON c.id = pc.category_id
          INNER JOIN products p ON pc.product_id = p.id
          WHERE c.enabled = true AND p.enabled = true
-         GROUP BY c.id, c.name
+         GROUP BY c.id, c.parent_id, c.name
          HAVING COUNT(DISTINCT p.id) > 0
          ORDER BY c.display_order ASC, c.name ASC
          LIMIT 100"
     } else {
         "SELECT
             c.id,
+            c.parent_id,
             c.name,
             COUNT(DISTINCT p.id)::bigint as count
          FROM categories c
          INNER JOIN product_categories pc ON c.id = pc.category_id
          INNER JOIN products p ON pc.product_id = p.id
          WHERE c.enabled = true
-         GROUP BY c.id, c.name
+         GROUP BY c.id, c.parent_id, c.name
          HAVING COUNT(DISTINCT p.id) > 0
          ORDER BY c.display_order ASC, c.name ASC
          LIMIT 100"

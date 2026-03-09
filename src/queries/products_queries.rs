@@ -76,7 +76,7 @@ fn escape_like(s: &str) -> String {
 }
 
 const SIMILARITY_THRESHOLD: f64 = 0.25;
-const DEFAULT_PAGE_SIZE: i64 = 15;
+const DEFAULT_PAGE_SIZE: i64 = 12;
 const MAX_PAGE_SIZE: i64 = 100;
 
 pub async fn search_products(
@@ -381,24 +381,49 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         filter_builder.push_bind(max_price);
     }
 
-    if let Some(brand_id) = params.brand {
-        filter_builder.push(" AND p.brand_id = ");
-        filter_builder.push_bind(brand_id);
-    }
-
     if !params.color.is_empty() {
         filter_builder.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
         filter_builder.push_bind(&params.color);
         filter_builder.push("))");
     }
 
-    if !params.category_id.is_empty() {
+    let has_discount = params.sale_type.contains(&SaleType::Discount);
+    let has_coins = params.sale_type.contains(&SaleType::Coins);
+    if has_discount && !has_coins {
+        filter_builder.push(" AND p.discount > 0");
+    } else if !has_discount && has_coins {
+        filter_builder.push(" AND false");
+    }
+
+    // Split category IDs into parent (top-level) and child categories
+    let (parent_category_ids, child_category_ids) = if !params.category_id.is_empty() {
+        let parents: Vec<i32> = sqlx::query_scalar::<_, i32>(
+            "SELECT id FROM categories WHERE id = ANY($1) AND parent_id IS NULL",
+        )
+        .bind(&params.category_id)
+        .fetch_all(pool)
+        .await?;
+
+        let children: Vec<i32> = sqlx::query_scalar::<_, i32>(
+            "SELECT id FROM categories WHERE id = ANY($1) AND parent_id IS NOT NULL",
+        )
+        .bind(&params.category_id)
+        .fetch_all(pool)
+        .await?;
+
+        (parents, children)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+
+    // Apply only parent category filter to base query (affects all facets including category facet)
+    if !parent_category_ids.is_empty() {
         filter_builder.push(
             " AND EXISTS (
                 WITH RECURSIVE category_tree AS (
                     SELECT id FROM categories WHERE id = ANY(",
         );
-        filter_builder.push_bind(&params.category_id);
+        filter_builder.push_bind(&parent_category_ids);
         filter_builder.push(
             ")
                     UNION ALL
@@ -412,18 +437,10 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         );
     }
 
-    let has_discount = params.sale_type.contains(&SaleType::Discount);
-    let has_coins = params.sale_type.contains(&SaleType::Coins);
-    if has_discount && !has_coins {
-        filter_builder.push(" AND p.discount > 0");
-    } else if !has_discount && has_coins {
-        filter_builder.push(" AND false");
-    }
+    // Base IDs: without brand or child-category filters (for brand & category facets)
+    let base_ids: Vec<i32> = filter_builder.build_query_scalar().fetch_all(pool).await?;
 
-    // First, get filtered product IDs
-    let filtered_ids: Vec<i32> = filter_builder.build_query_scalar().fetch_all(pool).await?;
-
-    if filtered_ids.is_empty() {
+    if base_ids.is_empty() {
         return Ok(ProductFacets {
             brands: Vec::new(),
             colors: Vec::new(),
@@ -431,7 +448,45 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         });
     }
 
-    // Query all three facets using the filtered IDs
+    // Apply child-category filter on top of base IDs
+    let category_filtered_ids = if !child_category_ids.is_empty() {
+        sqlx::query_scalar::<_, i32>(
+            "SELECT DISTINCT p.id FROM products p
+             WHERE p.id = ANY($1)
+             AND EXISTS (
+                 WITH RECURSIVE category_tree AS (
+                     SELECT id FROM categories WHERE id = ANY($2)
+                     UNION ALL
+                     SELECT c.id FROM categories c
+                     INNER JOIN category_tree ct ON c.parent_id = ct.id
+                 )
+                 SELECT 1 FROM product_categories pc
+                 WHERE pc.product_id = p.id
+                 AND pc.category_id IN (SELECT id FROM category_tree)
+             )",
+        )
+        .bind(&base_ids)
+        .bind(&child_category_ids)
+        .fetch_all(pool)
+        .await?
+    } else {
+        base_ids.clone()
+    };
+
+    // Apply brand filter for fully filtered IDs (colors use this)
+    let filtered_ids = if let Some(brand_id) = params.brand {
+        sqlx::query_scalar::<_, i32>(
+            "SELECT p.id FROM products p WHERE p.id = ANY($1) AND p.brand_id = $2",
+        )
+        .bind(&category_filtered_ids)
+        .bind(brand_id)
+        .fetch_all(pool)
+        .await?
+    } else {
+        category_filtered_ids.clone()
+    };
+
+    // Brand facet: base IDs + child-category filter, but NO brand filter
     let brands = sqlx::query_as::<_, BrandFacetValue>(
         "SELECT b.id, b.name, COUNT(*)::bigint as count
          FROM products p
@@ -441,7 +496,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
          ORDER BY count DESC
          LIMIT 50",
     )
-    .bind(&filtered_ids)
+    .bind(&category_filtered_ids)
     .fetch_all(pool)
     .await?;
 
@@ -458,17 +513,30 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
     .fetch_all(pool)
     .await?;
 
+    // Category facet: base IDs + brand filter, but NO child-category filter
+    let category_facet_ids = if let Some(brand_id) = params.brand {
+        sqlx::query_scalar::<_, i32>(
+            "SELECT p.id FROM products p WHERE p.id = ANY($1) AND p.brand_id = $2",
+        )
+        .bind(&base_ids)
+        .bind(brand_id)
+        .fetch_all(pool)
+        .await?
+    } else {
+        base_ids
+    };
+
     let categories = sqlx::query_as::<_, CategoryFacetValue>(
-        "SELECT c.id, c.name, COUNT(DISTINCT p.id)::bigint as count
+        "SELECT c.id, c.parent_id, c.name, COUNT(DISTINCT p.id)::bigint as count
          FROM product_categories pc
          JOIN categories c ON pc.category_id = c.id
          JOIN products p ON pc.product_id = p.id
          WHERE p.id = ANY($1) AND c.enabled = true
-         GROUP BY c.id, c.name
+         GROUP BY c.id, c.parent_id, c.name
          ORDER BY count DESC
          LIMIT 100",
     )
-    .bind(&filtered_ids)
+    .bind(&category_facet_ids)
     .fetch_all(pool)
     .await?;
 

@@ -57,6 +57,7 @@ pub struct UpdateCategoryRequest {
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CategoryFacetValue {
     pub id: i32,
+    pub parent_id: Option<i32>,
     pub name: String,
     pub count: i64,
 }
