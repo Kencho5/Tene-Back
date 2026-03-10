@@ -73,7 +73,9 @@ pub struct ProductQuery {
     #[serde(default, deserialize_with = "deserialize_sale_types")]
     pub sale_type: Vec<SaleType>,
     #[serde(default, deserialize_with = "deserialize_i32_vec")]
-    pub category_id: Vec<i32>,
+    pub parent_category_id: Vec<i32>,
+    #[serde(default, deserialize_with = "deserialize_i32_vec")]
+    pub child_category_id: Vec<i32>,
     pub sort_by: Option<SortBy>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
