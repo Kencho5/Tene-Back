@@ -57,7 +57,7 @@ pub async fn create_order_with_items(
     .bind(org_name)
     .bind(org_code)
     .bind(&req.email)
-    .bind(req.phone_number)
+    .bind(&req.phone_number)
     .bind(&req.address)
     .bind(&req.delivery_type)
     .bind(&req.delivery_time)

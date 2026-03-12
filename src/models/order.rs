@@ -20,7 +20,7 @@ pub struct Order {
     pub organization_name: Option<String>,
     pub organization_code: Option<String>,
     pub email: String,
-    pub phone_number: i64,
+    pub phone_number: String,
     pub address: String,
     pub delivery_type: String,
     pub delivery_time: String,
@@ -77,7 +77,7 @@ pub struct CheckoutRequest {
     #[serde(flatten)]
     pub customer: CustomerInfo,
     pub email: String,
-    pub phone_number: i64,
+    pub phone_number: String,
     pub address: String,
     pub delivery_type: String,
     pub delivery_time: String,

@@ -1,0 +1,1 @@
+ALTER TABLE orders ALTER COLUMN phone_number TYPE VARCHAR(20) USING phone_number::VARCHAR;
