@@ -71,6 +71,7 @@ fn user_routes() -> Router<AppState> {
 fn checkout_routes() -> Router<AppState> {
     Router::new()
         .route("/checkout", post(orders::checkout))
+        .route("/orders/{id}", get(orders::get_order))
         .route("/orders", get(orders::get_orders))
         .layer(middleware::from_fn(auth_middleware))
 }

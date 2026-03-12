@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use axum::{
     Extension, Json,
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
@@ -265,6 +265,21 @@ pub async fn payment_redirect(
         state.frontend_url, order_id, order_status
     );
     Redirect::to(&target)
+}
+
+pub async fn get_order(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(order_id): Path<String>,
+) -> Result<Json<OrderResponse>> {
+    let user_id = extract_user_id(&claims)?;
+    let order = order_queries::get_user_order(&state.db, user_id, &order_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("შეკვეთა ვერ მოიძებნა".to_string()))?;
+
+    let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
+
+    Ok(Json(OrderResponse { order, items }))
 }
 
 pub async fn get_orders(
