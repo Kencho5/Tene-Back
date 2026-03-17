@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum UserRole {
     User,
     Admin,
+    Operator,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

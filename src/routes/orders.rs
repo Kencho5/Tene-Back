@@ -19,7 +19,7 @@ use crate::{
     utils::jwt::Claims,
 };
 
-const DELIVERY_PRICE: Decimal = dec!(5);
+const DELIVERY_PRICE: Decimal = dec!(12);
 
 pub async fn checkout(
     State(state): State<AppState>,

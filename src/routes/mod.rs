@@ -16,7 +16,7 @@ use axum::{
 
 use crate::{
     AppState,
-    middleware::{admin_middleware, auth_middleware},
+    middleware::{admin_middleware, auth_middleware, operator_middleware},
 };
 
 pub fn create_router() -> Router<AppState> {
@@ -31,6 +31,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/payments/callback", post(orders::flitt_callback))
         .route("/payments/redirect", get(orders::payment_redirect))
         .merge(admin_routes())
+        .merge(operator_routes())
 }
 
 fn auth_routes() -> Router<AppState> {
@@ -126,7 +127,11 @@ fn admin_routes() -> Router<AppState> {
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))
         .route("/admin/users/{id}", delete(admin::delete_user))
-        //ADMIN ORDERS
-        .route("/admin/orders", get(admin::get_orders))
         .layer(middleware::from_fn(admin_middleware))
+}
+
+fn operator_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/orders", get(admin::get_orders))
+        .layer(middleware::from_fn(operator_middleware))
 }
