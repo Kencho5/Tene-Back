@@ -147,7 +147,13 @@ pub async fn checkout(
         });
     }
 
-    let amount_tetri = ((total_amount + DELIVERY_PRICE) * Decimal::from(100))
+    let delivery = if payload.delivery_type == "pickup" {
+        Decimal::ZERO
+    } else {
+        DELIVERY_PRICE
+    };
+
+    let amount_tetri = ((total_amount + delivery) * Decimal::from(100))
         .trunc()
         .to_i32()
         .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
