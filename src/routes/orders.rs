@@ -19,8 +19,6 @@ use crate::{
     utils::jwt::Claims,
 };
 
-const DELIVERY_PRICE: Decimal = dec!(12);
-
 pub async fn checkout(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -147,10 +145,10 @@ pub async fn checkout(
         });
     }
 
-    let delivery = if payload.delivery_type == "pickup" {
-        Decimal::ZERO
+    let delivery = if payload.delivery_time == "same_day" && payload.delivery_type != "pickup" {
+        dec!(12)
     } else {
-        DELIVERY_PRICE
+        Decimal::ZERO
     };
 
     let amount_tetri = ((total_amount + delivery) * Decimal::from(100))
