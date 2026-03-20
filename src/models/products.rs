@@ -7,7 +7,7 @@ use crate::models::{Category, CategoryFacetValue};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Product {
-    pub id: i32,
+    pub id: String,
     pub name: String,
     pub description: Option<String>,
     pub price: Decimal,
@@ -24,7 +24,7 @@ pub struct Product {
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProductImage {
-    pub product_id: i32,
+    pub product_id: String,
     pub image_uuid: Uuid,
     pub color: Option<String>,
     pub is_primary: bool,
@@ -63,7 +63,7 @@ pub enum SaleType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProductQuery {
-    pub id: Option<i32>,
+    pub id: Option<String>,
     pub query: Option<String>,
     pub price_from: Option<i32>,
     pub price_to: Option<i32>,

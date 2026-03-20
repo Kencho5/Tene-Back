@@ -17,7 +17,7 @@ pub struct Category {
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProductCategory {
-    pub product_id: i32,
+    pub product_id: String,
     pub category_id: i32,
     pub created_at: DateTime<Utc>,
 }

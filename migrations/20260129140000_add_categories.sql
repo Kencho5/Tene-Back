@@ -16,7 +16,7 @@ CREATE INDEX idx_categories_display_order ON categories(display_order);
 CREATE INDEX idx_categories_slug ON categories(slug);
 
 CREATE TABLE product_categories (
-    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     PRIMARY KEY (product_id, category_id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

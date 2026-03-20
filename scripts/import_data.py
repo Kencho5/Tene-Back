@@ -2,11 +2,14 @@
 """
 Import categories, brands, and products from old project CSVs into the new Tene backend.
 
-Usage:
-    python3 scripts/import_data.py --base-url http://localhost:3000 --token <admin_jwt_token>
+Key improvements over old script:
+- Products grouped by `code`: color variants become images on one product, not separate products
+- Product ID is TEXT (the `code` field from old DB)
+- Category mapping uses link_cat with fallback to middle/parent fields
+- Brands imported from brands.csv directly
 
-Requires:
-    pip install aiohttp asyncpg
+Usage:
+    python3 scripts/import_data.py --base-url http://localhost:3000 --token <admin_jwt_token> --db-url <db_url>
 """
 
 import csv
@@ -15,13 +18,12 @@ import asyncio
 import math
 import os
 import re
+from urllib.parse import quote
 
 import aiohttp
 import asyncpg
 
 OLD_IMAGE_BASE = "https://ginventor.ge/uploads/images/categories"
-OLD_PRODUCT_IMAGE_BASE = "https://ginventor.ge/uploads/photos/news"
-
 
 NAMED_COLORS = {
     "black": (0, 0, 0),
@@ -51,7 +53,6 @@ NAMED_COLORS = {
 
 
 def hex_to_color_name(hex_code):
-    """Convert hex color code to nearest named color."""
     hex_code = hex_code.lstrip('#')
     if len(hex_code) != 6:
         return None
@@ -78,21 +79,23 @@ def slugify(text):
     return text.strip('-') or 'unnamed'
 
 
-async def import_brands(pool, products_csv_path):
+# ─── BRANDS ───────────────────────────────────────────────────────────────────
+
+async def import_brands(pool, brands_csv_path):
     print("\n=== Importing brands ===")
     brands = {}
-    with open(products_csv_path, 'r', encoding='utf-8') as f:
+    with open(brands_csv_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            bid = row.get('brand', '').strip()
-            btitle = row.get('brand_title', '').strip()
-            if bid and btitle and bid != '0':
-                brands[int(bid)] = btitle
+            bid = int(row['id'])
+            name = row['title'].strip()
+            if name:
+                brands[bid] = name
 
     async with pool.acquire() as conn:
         await conn.executemany(
             "INSERT INTO brands (id, name) VALUES ($1, $2) ON CONFLICT (name) DO NOTHING",
-            [(old_id, name) for old_id, name in sorted(brands.items())]
+            [(bid, name) for bid, name in sorted(brands.items())]
         )
         await conn.execute("SELECT setval('brands_id_seq', (SELECT COALESCE(MAX(id), 1) FROM brands))")
 
@@ -100,7 +103,9 @@ async def import_brands(pool, products_csv_path):
     return brands
 
 
-async def import_categories(categories_csv_path, base_url, token):
+# ─── CATEGORIES ───────────────────────────────────────────────────────────────
+
+async def import_categories(pool, categories_csv_path, base_url, token):
     print("\n=== Importing categories ===")
     headers = {
         "Authorization": f"Bearer {token}",
@@ -122,9 +127,8 @@ async def import_categories(categories_csv_path, base_url, token):
 
     async with aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(ssl=False),
-        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+        headers={"User-Agent": "Mozilla/5.0"}
     ) as session:
-        # Import roots first (must be sequential for ID mapping)
         for row in roots:
             result = await create_category(session, base_url, headers, row, old_to_new_id)
             if result:
@@ -132,9 +136,7 @@ async def import_categories(categories_csv_path, base_url, token):
             else:
                 failed += 1
 
-        # Import children concurrently in batches
         sem = asyncio.Semaphore(10)
-
         async def limited_create(row):
             async with sem:
                 return await create_category(session, base_url, headers, row, old_to_new_id)
@@ -147,7 +149,16 @@ async def import_categories(categories_csv_path, base_url, token):
                 failed += 1
 
     print(f"Created {created} categories, {failed} failed")
-    return old_to_new_id
+
+    # Build link_cat -> new category ID mapping
+    link_cat_to_new = {}
+    for row in rows:
+        lc = row.get('link_cat', '').strip()
+        old_id = int(row['id'])
+        if lc and lc != '0' and old_id in old_to_new_id:
+            link_cat_to_new[lc] = old_to_new_id[old_id]
+
+    return old_to_new_id, link_cat_to_new
 
 
 async def create_category(session, base_url, headers, row, old_to_new_id):
@@ -167,29 +178,35 @@ async def create_category(session, base_url, headers, row, old_to_new_id):
             print(f"  SKIP category '{name}' (id={old_id}): parent {parent_id_old} not found")
             return False
 
-    payload = {
-        "name": name,
-        "slug": slug,
-        "description": description,
-        "display_order": display_order,
-        "parent_id": parent_id,
-        "enabled": True
-    }
-
-    async with session.post(f"{base_url}/admin/categories", headers=headers, json=payload) as resp:
-        if resp.status != 200:
-            text = await resp.text()
-            print(f"  FAIL category '{name}' (id={old_id}): {resp.status} {text}")
-            return False
-        new_cat = await resp.json()
-
-    new_id = new_cat['id']
-    old_to_new_id[old_id] = new_id
-
-    if photo:
-        await upload_category_image(session, base_url, headers, new_id, photo)
-
-    return True
+    # Ensure unique slug
+    slug_base = slug
+    slug_counter = 1
+    while True:
+        payload = {
+            "name": name,
+            "slug": slug,
+            "description": description,
+            "display_order": display_order,
+            "parent_id": parent_id,
+            "enabled": True
+        }
+        async with session.post(f"{base_url}/admin/categories", headers=headers, json=payload) as resp:
+            if resp.status == 200:
+                new_cat = await resp.json()
+                new_id = new_cat['id']
+                old_to_new_id[old_id] = new_id
+                if photo:
+                    await upload_category_image(session, base_url, headers, new_id, photo)
+                return True
+            elif resp.status == 409:
+                # slug conflict, try with suffix
+                slug_counter += 1
+                slug = f"{slug_base}-{slug_counter}"
+                continue
+            else:
+                text = await resp.text()
+                print(f"  FAIL category '{name}' (id={old_id}): {resp.status} {text}")
+                return False
 
 
 async def upload_category_image(session, base_url, headers, category_id, photo_filename):
@@ -199,7 +216,6 @@ async def upload_category_image(session, base_url, headers, category_id, photo_f
     content_type_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}
     content_type = content_type_map.get(ext, 'image/jpeg')
 
-    # Get presigned upload URL
     async with session.put(
         f"{base_url}/admin/categories/{category_id}/image",
         headers=headers,
@@ -212,7 +228,6 @@ async def upload_category_image(session, base_url, headers, category_id, photo_f
 
     presigned_url = upload_data['upload_url']
 
-    # Fetch old image
     try:
         async with session.get(image_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
             if resp.status != 200:
@@ -223,7 +238,6 @@ async def upload_category_image(session, base_url, headers, category_id, photo_f
         print(f"    FAIL fetch image {image_url}: {e}")
         return
 
-    # Upload to S3
     async with session.put(presigned_url, data=image_data, headers={"Content-Type": content_type}) as resp:
         if resp.status in (200, 204):
             print(f"    Image uploaded for category {category_id}")
@@ -231,49 +245,112 @@ async def upload_category_image(session, base_url, headers, category_id, photo_f
             print(f"    FAIL upload image for category {category_id}: {resp.status}")
 
 
-INT32_MAX = 2_147_483_647
+# ─── PRODUCTS ─────────────────────────────────────────────────────────────────
 
-def parse_product_id(code, fallback_id):
-    """Extract numeric ID from code like ALT-117371 -> 117371. Falls back to old id if out of int32 range."""
-    nums = re.sub(r'[^0-9]', '', code)
-    if nums:
-        val = int(nums)
-        if val <= INT32_MAX:
-            return val
-    # Fallback to old numeric id
-    fallback = fallback_id.strip()
-    if fallback:
-        return int(fallback)
-    return None
-
-
-def parse_warranty(amount, gtype):
-    """Convert guarantee_amount + guarantee_type to warranty string."""
-    amount = amount.strip()
-    gtype = gtype.strip()
-    if not amount or amount == '0' or gtype == '0':
-        return None
-    unit = 'year' if gtype == '1' else 'month'
-    suffix = 's' if amount != '1' else ''
-    return f"{amount} {unit}{suffix}"
+def strip_color_suffix(title):
+    """Strip trailing color name from product title to find the base product name."""
+    color_words = [
+        'white', 'black', 'blue', 'red', 'green', 'grey', 'gray', 'gold',
+        'silver', 'pink', 'purple', 'yellow', 'orange', 'brown', 'coral',
+        'midnight', 'navy', 'teal', 'olive', 'beige', 'turquoise', 'lime',
+        'cyan', 'magenta', 'graphite', 'starlight', 'sierra', 'alpine',
+        'space gray', 'space grey',
+    ]
+    lower = title.lower().strip()
+    for cw in sorted(color_words, key=len, reverse=True):
+        if lower.endswith(cw):
+            return title[:len(title) - len(cw)].strip().rstrip(' -/')
+    return title
 
 
-def build_link_cat_map(categories_csv_path):
-    """Build mapping: link_cat value -> old category id."""
-    link_cat_to_old = {}
-    with open(categories_csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            lc = row.get('link_cat', '').strip()
-            if lc and lc != '0':
-                link_cat_to_old[lc] = int(row['id'])
-    return link_cat_to_old
+def load_specifications(specs_csv, content_csv, assigned_csv, products_csv):
+    """Build mapping: old product_id -> specifications JSON object."""
+
+    # Load spec field definitions
+    specs = {}
+    with open(specs_csv, 'r', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            specs[row['id']] = row
+
+    # Load spec content values
+    contents = {}
+    with open(content_csv, 'r', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            contents[row['id']] = row
+
+    # Map old product_id -> code, and code -> category from products CSV
+    old_id_to_code = {}
+    code_to_category = {}
+    with open(products_csv, 'r', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            old_id = row['id']
+            code = row.get('code', '').strip()
+            cat = row.get('category', '').strip()
+            if code:
+                old_id_to_code[old_id] = code
+                if code not in code_to_category and cat:
+                    code_to_category[code] = cat
+
+    # Build per old-product-id grouped specs
+    # Filter: only keep specs whose category matches the product's category
+    # in the OLD category system. This avoids mixing e.g. laptop specs into
+    # a headphone product when the old DB had cross-category assignments.
+    product_specs = {}
+    with open(assigned_csv, 'r', encoding='utf-8') as f:
+        for a in csv.DictReader(f):
+            pid = a['product_id']
+            spec = specs.get(a['specification_id'])
+            content = contents.get(a['specification_content_id'])
+            if not spec or not content:
+                continue
+
+            # Filter by product's category — but only if we know both
+            code = old_id_to_code.get(pid)
+            if code:
+                product_cat = code_to_category.get(code)
+                spec_cat = spec.get('category_id', '')
+                if product_cat and spec_cat and spec_cat != product_cat:
+                    continue
+
+            val = content['title'].strip()
+            if not val or val == '?':
+                continue
+            name = spec['title'].strip()
+            if not name:
+                continue
+
+            parent = specs.get(spec.get('parent_id', ''))
+            group = parent['title'].strip() if parent and parent.get('title') else 'სხვა'
+
+            if pid not in product_specs:
+                product_specs[pid] = {}
+            product_specs[pid].setdefault(group, []).append({'name': name, 'value': val})
+
+    # Build set of all known codes for fallback matching
+    all_codes = set(old_id_to_code.values())
+
+    # Re-key by code, first match wins
+    specs_by_code = {}
+    for old_pid, grouped in product_specs.items():
+        code = old_id_to_code.get(old_pid)
+        if not code:
+            # Fallback: try GIN-200{pid} pattern for old IDs not in news.csv
+            if old_pid.isdigit():
+                candidate = f"GIN-200{old_pid}"
+                if candidate in all_codes:
+                    code = candidate
+            if not code:
+                continue
+        if code in specs_by_code:
+            continue
+        specs_by_code[code] = grouped
+
+    print(f"  Loaded specs for {len(specs_by_code)} products (by code)")
+    return specs_by_code
 
 
-async def import_products(pool, products_csv_path, categories_csv_path, cat_old_to_new, base_url, token, images_dir, skip_images=False):
+async def import_products(pool, products_csv_path, link_cat_to_new, base_url, token, images_dir, specs_by_code, skip_images=False):
     print("\n=== Importing products ===")
-
-    link_cat_map = build_link_cat_map(categories_csv_path)
 
     rows = []
     with open(products_csv_path, 'r', encoding='utf-8') as f:
@@ -283,74 +360,126 @@ async def import_products(pool, products_csv_path, categories_csv_path, cat_old_
 
     print(f"Total rows in CSV: {len(rows)}")
 
-    inserted = 0
-    skipped = 0
-    images_uploaded = 0
-
-    # Parse all product data
-    product_records = []
-    category_records = []
+    # ── Group rows by product code ──
+    # Products with the same `code` are color variants of the same product.
+    # For products with different codes but identical base names (after stripping
+    # color suffix), we still treat them as separate products — they have different
+    # barcodes/SKUs.
+    products = {}  # code -> {product_data, images: [{photo, color, row}]}
 
     for row in rows:
         code = row.get('code', '').strip()
-        product_id = parse_product_id(code, row.get('id', ''))
-        if product_id is None:
-            skipped += 1
+        if not code:
             continue
 
         name = row.get('title', '').strip()
         if not name:
-            skipped += 1
             continue
 
-        description = row.get('text', '').strip() or None
-        price_str = row.get('price', '').strip()
-        try:
-            price = float(price_str) if price_str else 0.0
-        except ValueError:
-            cleaned = re.sub(r'\.{2,}', '.', price_str)
-            try:
-                price = float(cleaned)
-            except ValueError:
-                price = 0.0
-        sale_percent = float(row.get('sale_percent', '0').strip() or '0')
+        photo = row.get('photo', '').strip()
+        color_hex = row.get('color', '').strip()
+        color_name = hex_to_color_name(color_hex) if color_hex else None
         stock = int(row.get('stock', '0').strip() or '0')
-        brand_raw = row.get('brand', '').strip()
-        brand_id = int(brand_raw) if brand_raw and brand_raw != '0' else None
-        warranty = parse_warranty(
-            row.get('guarantee_amount', ''),
-            row.get('guarantee_type', '')
-        )
-        active = row.get('active', '0').strip()
-        enabled = active == '1'
 
+        if code not in products:
+            # First row for this code — this becomes the product
+            description = row.get('text', '').strip() or None
+            price_str = row.get('price', '').strip()
+            try:
+                price = float(price_str) if price_str else 0.0
+            except ValueError:
+                cleaned = re.sub(r'\.{2,}', '.', price_str)
+                try:
+                    price = float(cleaned)
+                except ValueError:
+                    price = 0.0
+
+            sale_percent = float(row.get('sale_percent', '0').strip() or '0')
+            brand_raw = row.get('brand', '').strip()
+            brand_id = int(brand_raw) if brand_raw and brand_raw != '0' else None
+
+            warranty = parse_warranty(
+                row.get('guarantee_amount', ''),
+                row.get('guarantee_type', '')
+            )
+            active = row.get('active', '0').strip()
+            enabled = active == '1'
+
+            # Resolve category via link_cat mapping: try category, then middle, then parent
+            cat_val = row.get('category', '').strip()
+            mid_val = row.get('middle', '').strip()
+            par_val = row.get('parent', '').strip()
+            new_cat_id = None
+            for val in [cat_val, mid_val, par_val]:
+                if val in link_cat_to_new:
+                    new_cat_id = link_cat_to_new[val]
+                    break
+
+            # Use the base name (stripped of color suffix) as product name
+            base_name = strip_color_suffix(name)
+
+            products[code] = {
+                'id': code,
+                'name': base_name,
+                'description': description,
+                'price': price,
+                'discount': sale_percent,
+                'brand_id': brand_id,
+                'warranty': warranty,
+                'enabled': enabled,
+                'category_id': new_cat_id,
+                'specifications': specs_by_code.get(code, {}),
+                'images': [],
+            }
+
+        # Add image for this variant
+        if photo:
+            products[code]['images'].append({
+                'photo': photo,
+                'color': color_name,
+                'quantity': stock,
+            })
+
+    print(f"Unique products (by code): {len(products)}")
+    print(f"Total images: {sum(len(p['images']) for p in products.values())}")
+
+    # ── Bulk insert products ──
+    import json
+
+    product_records = []
+    category_records = []
+    specs_count = 0
+
+    for code, prod in products.items():
+        spec_json = json.dumps(prod['specifications'], ensure_ascii=False) if prod['specifications'] else '{}'
+        if prod['specifications']:
+            specs_count += 1
         product_records.append((
-            product_id, name, description, price, sale_percent, stock,
-            brand_id, warranty, enabled
+            prod['id'], prod['name'], prod['description'],
+            prod['price'], prod['discount'], 0,
+            spec_json,
+            prod['brand_id'], prod['warranty'], prod['enabled']
         ))
+        if prod['category_id']:
+            category_records.append((prod['id'], prod['category_id']))
 
-        # Map product to category
-        cat_val = row.get('category', '').strip()
-        mid_val = row.get('middle', '').strip()
-        par_val = row.get('parent', '').strip()
-        old_cat_id = None
-        for val in [cat_val, mid_val, par_val]:
-            if val in link_cat_map:
-                old_cat_id = link_cat_map[val]
-                break
-        if old_cat_id and old_cat_id in cat_old_to_new:
-            category_records.append((product_id, cat_old_to_new[old_cat_id]))
-
-    # Bulk insert products in batches
+    inserted = 0
+    skipped = 0
     BATCH_SIZE = 500
+
     async with pool.acquire() as conn:
         for i in range(0, len(product_records), BATCH_SIZE):
             batch = product_records[i:i + BATCH_SIZE]
             try:
                 await conn.executemany(
                     """INSERT INTO products (id, name, description, price, discount, quantity, specifications, brand_id, warranty, enabled)
-                       VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7, $8, $9)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10)
                        ON CONFLICT (id) DO UPDATE SET
+                           name = EXCLUDED.name,
+                           description = COALESCE(EXCLUDED.description, products.description),
+                           price = EXCLUDED.price,
+                           discount = EXCLUDED.discount,
+                           specifications = EXCLUDED.specifications,
                            brand_id = COALESCE(EXCLUDED.brand_id, products.brand_id),
                            warranty = COALESCE(EXCLUDED.warranty, products.warranty),
                            enabled = EXCLUDED.enabled""",
@@ -375,11 +504,13 @@ async def import_products(pool, products_csv_path, categories_csv_path, cat_old_
                 print(f"  FAIL category assignments: {e}")
 
     print(f"Inserted {inserted} products, skipped {skipped}")
+    print(f"Products with category: {len(category_records)}/{len(product_records)}")
+    print(f"Products with specifications: {specs_count}")
 
     if skip_images:
         return
 
-    # Upload product images concurrently
+    # ── Upload product images ──
     print("\n=== Uploading product images ===")
     headers = {
         "Authorization": f"Bearer {token}",
@@ -389,101 +520,128 @@ async def import_products(pool, products_csv_path, categories_csv_path, cat_old_
 
     async with aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(ssl=False),
-        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+        headers={"User-Agent": "Mozilla/5.0"}
     ) as session:
         tasks = []
-        for row in rows:
-            code = row.get('code', '').strip()
-            product_id = parse_product_id(code, row.get('id', ''))
-            photo = row.get('photo', '').strip()
-            color = hex_to_color_name(row.get('color', '').strip())
-            if product_id and photo:
-                tasks.append((session, sem, base_url, headers, product_id, photo, images_dir, color))
+        for code, prod in products.items():
+            for idx, img in enumerate(prod['images']):
+                is_primary = (idx == 0)
+                tasks.append((
+                    session, sem, base_url, headers, code,
+                    img['photo'], images_dir, img['color'], is_primary,
+                    img['quantity']
+                ))
 
         progress = {'done': 0, 'total': len(tasks)}
         print(f"Total images to upload: {progress['total']}")
-        tasks = [upload_product_image(*t, progress) for t in tasks]
+        coros = [upload_product_image(*t, progress) for t in tasks]
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*coros, return_exceptions=True)
         images_uploaded = sum(1 for r in results if r is True)
 
     print(f"Uploaded {images_uploaded} product images")
 
 
-async def upload_product_image(session, sem, base_url, headers, product_id, photo_filename, images_dir, color, progress):
+def parse_warranty(amount, gtype):
+    amount = amount.strip()
+    gtype = gtype.strip()
+    if not amount or amount == '0' or gtype == '0':
+        return None
+    unit = 'year' if gtype == '1' else 'month'
+    suffix = 's' if amount != '1' else ''
+    return f"{amount} {unit}{suffix}"
+
+
+async def upload_product_image(session, sem, base_url, headers, product_id, photo_filename, images_dir, color, is_primary, quantity, progress):
     async with sem:
         ext = photo_filename.rsplit('.', 1)[-1].lower() if '.' in photo_filename else 'jpg'
         content_type_map = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp'}
         content_type = content_type_map.get(ext, 'image/jpeg')
 
-        # Read image from local directory
         image_path = os.path.join(images_dir, photo_filename)
         if not os.path.exists(image_path):
-            print(f"    SKIP product {product_id}: image not found {image_path}")
+            progress['done'] += 1
             return False
 
         with open(image_path, 'rb') as f:
             image_data = f.read()
 
-        # Get presigned URL via admin API
-        payload = {"images": [{"content_type": content_type, "is_primary": True, "color": color}]}
+        payload = {"images": [{"content_type": content_type, "is_primary": is_primary, "color": color, "quantity": quantity}]}
         async with session.put(
-            f"{base_url}/admin/products/{product_id}/images",
+            f"{base_url}/admin/products/{quote(product_id, safe='')}/images",
             headers=headers,
             json=payload
         ) as resp:
             if resp.status != 200:
-                print(f"    FAIL get upload URL for product {product_id}: {resp.status}")
+                progress['done'] += 1
+                text = await resp.text()
+                print(f"    FAIL get upload URL for product {product_id}: {resp.status} {text}")
                 return False
             data = await resp.json()
 
         if not data.get('images'):
-            print(f"    FAIL no upload URL returned for product {product_id}")
+            progress['done'] += 1
             return False
 
         presigned_url = data['images'][0]['upload_url']
 
-        # Upload to S3
         async with session.put(presigned_url, data=image_data, headers={"Content-Type": content_type}) as resp:
             progress['done'] += 1
             if resp.status in (200, 204):
-                print(f"    [{progress['done']}/{progress['total']}] Uploaded image for product {product_id}")
+                if progress['done'] % 100 == 0 or progress['done'] == progress['total']:
+                    print(f"    [{progress['done']}/{progress['total']}] Progress...")
                 return True
             else:
-                print(f"    [{progress['done']}/{progress['total']}] FAIL upload image for product {product_id}: {resp.status}")
+                print(f"    [{progress['done']}/{progress['total']}] FAIL upload for product {product_id}: {resp.status}")
                 return False
 
+
+# ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 async def main():
     parser = argparse.ArgumentParser(description="Import data from old project CSVs")
     parser.add_argument("--base-url", default="http://localhost:3000", help="Backend API base URL")
     parser.add_argument("--token", required=True, help="Admin JWT token")
     parser.add_argument("--db-url", required=True, help="Database URL")
-    parser.add_argument("--categories-csv", default="tests/categories_new.csv", help="Categories CSV path")
-    parser.add_argument("--products-csv", default="tests/news.csv", help="Products CSV path")
-    parser.add_argument("--skip-categories", action="store_true", help="Skip category import")
-    parser.add_argument("--skip-brands", action="store_true", help="Skip brand import")
-    parser.add_argument("--skip-products", action="store_true", help="Skip product import")
-    parser.add_argument("--images-dir", default="tests/product_images_full", help="Local directory with product images")
-    parser.add_argument("--skip-images", action="store_true", help="Skip product image upload")
+    parser.add_argument("--categories-csv", default="tests/categories_new.csv")
+    parser.add_argument("--products-csv", default="tests/news.csv")
+    parser.add_argument("--brands-csv", default="tests/brands.csv")
+    parser.add_argument("--specs-csv", default="tests/specifications.csv")
+    parser.add_argument("--spec-content-csv", default="tests/specification_content.csv")
+    parser.add_argument("--spec-assigned-csv", default="tests/specification_content_assigned.csv")
+    parser.add_argument("--skip-categories", action="store_true")
+    parser.add_argument("--skip-brands", action="store_true")
+    parser.add_argument("--skip-products", action="store_true")
+    parser.add_argument("--images-dir", default="tests/product_images_full")
+    parser.add_argument("--skip-images", action="store_true")
     args = parser.parse_args()
 
     pool = await asyncpg.create_pool(args.db_url)
 
     try:
         if not args.skip_brands:
-            await import_brands(pool, args.products_csv)
+            await import_brands(pool, args.brands_csv)
 
-        cat_old_to_new = {}
+        link_cat_to_new = {}
         if not args.skip_categories:
-            cat_old_to_new = await import_categories(args.categories_csv, args.base_url, args.token)
-            print(f"\nCategory ID mapping (old -> new): {cat_old_to_new}")
+            _, link_cat_to_new = await import_categories(
+                pool, args.categories_csv, args.base_url, args.token
+            )
+            print(f"\nlink_cat -> new category ID mapping ({len(link_cat_to_new)} entries)")
 
         if not args.skip_products:
-            # If categories were skipped, try to rebuild mapping from DB
-            if not cat_old_to_new:
+            if not link_cat_to_new:
                 print("Note: no category mapping available, products won't be assigned categories")
-            await import_products(pool, args.products_csv, args.categories_csv, cat_old_to_new, args.base_url, args.token, args.images_dir, args.skip_images)
+
+            specs_by_code = load_specifications(
+                args.specs_csv, args.spec_content_csv,
+                args.spec_assigned_csv, args.products_csv
+            )
+
+            await import_products(
+                pool, args.products_csv, link_cat_to_new,
+                args.base_url, args.token, args.images_dir, specs_by_code, args.skip_images
+            )
 
         print("\nDone!")
     finally:

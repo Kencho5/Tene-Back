@@ -64,7 +64,7 @@ pub async fn create_order_with_items(
     .fetch_one(&mut *tx)
     .await?;
 
-    let product_ids: Vec<i32> = items.iter().map(|i| i.product_id).collect();
+    let product_ids: Vec<&str> = items.iter().map(|i| i.product_id.as_str()).collect();
     let colors: Vec<Option<&str>> = items.iter().map(|i| i.color.as_deref()).collect();
     let quantities: Vec<i32> = items.iter().map(|i| i.quantity).collect();
     let prices: Vec<Decimal> = items.iter().map(|i| i.price).collect();
@@ -73,7 +73,7 @@ pub async fn create_order_with_items(
 
     sqlx::query(
         "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image)
-         SELECT $1, unnest($2::int[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[])",
+         SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[])",
     )
     .bind(order.id)
     .bind(&product_ids)
@@ -137,7 +137,7 @@ pub async fn update_order_status_and_deduct_stock(
                          WHERE product_id = $2 AND color = $3 AND quantity >= $1",
                     )
                     .bind(item.quantity)
-                    .bind(item.product_id)
+                    .bind(&item.product_id)
                     .bind(color)
                     .execute(&mut *tx)
                     .await?
@@ -149,7 +149,7 @@ pub async fn update_order_status_and_deduct_stock(
                          WHERE product_id = $2 AND is_primary = true AND quantity >= $1",
                     )
                     .bind(item.quantity)
-                    .bind(item.product_id)
+                    .bind(&item.product_id)
                     .execute(&mut *tx)
                     .await?
                 }

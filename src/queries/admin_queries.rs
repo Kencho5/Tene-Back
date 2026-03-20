@@ -19,7 +19,7 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
-    .bind(req.id)
+    .bind(&req.id)
     .bind(&req.name)
     .bind(&req.description)
     .bind(&req.price)
@@ -39,7 +39,7 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
     Ok(product)
 }
 
-pub async fn update_product(pool: &PgPool, id: i32, req: &ProductRequest) -> Result<Product> {
+pub async fn update_product(pool: &PgPool, id: &str, req: &ProductRequest) -> Result<Product> {
     let product = sqlx::query_as::<_, Product>(
         r#"
         UPDATE products
@@ -125,7 +125,7 @@ pub async fn find_brand_by_id(pool: &PgPool, id: i32) -> Result<Option<Brand>> {
     Ok(brand)
 }
 
-pub async fn delete_product(pool: &PgPool, id: i32) -> Result<u64> {
+pub async fn delete_product(pool: &PgPool, id: &str) -> Result<u64> {
     let result = sqlx::query("DELETE FROM products WHERE id = $1")
         .bind(id)
         .execute(pool)
@@ -136,7 +136,7 @@ pub async fn delete_product(pool: &PgPool, id: i32) -> Result<u64> {
 
 pub async fn add_product_image(
     pool: &PgPool,
-    product_id: i32,
+    product_id: &str,
     image_uuid: uuid::Uuid,
     color: Option<String>,
     is_primary: bool,
@@ -163,7 +163,7 @@ pub async fn add_product_image(
 
 pub async fn delete_product_image(
     pool: &PgPool,
-    product_id: i32,
+    product_id: &str,
     image_uuid: uuid::Uuid,
 ) -> Result<Option<ProductImage>> {
     let deleted_image = sqlx::query_as::<_, ProductImage>(
@@ -179,7 +179,7 @@ pub async fn delete_product_image(
 
 pub async fn update_product_image_metadata(
     pool: &PgPool,
-    product_id: i32,
+    product_id: &str,
     image_uuid: uuid::Uuid,
     color: Option<String>,
     is_primary: Option<bool>,

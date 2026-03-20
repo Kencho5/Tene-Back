@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
+pub async fn find_by_id(pool: &PgPool, id: &str) -> Result<Option<Product>> {
     let product = sqlx::query_as::<_, Product>(
         "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1"
     )
@@ -21,7 +21,7 @@ pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Product>> {
     Ok(product)
 }
 
-pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<ProductImage>> {
+pub async fn find_images_by_product_id(pool: &PgPool, id: &str) -> Result<Vec<ProductImage>> {
     let product_images = sqlx::query_as::<_, ProductImage>(
         "SELECT product_id, image_uuid, color, is_primary, extension, quantity
          FROM product_images
@@ -35,7 +35,7 @@ pub async fn find_images_by_product_id(pool: &PgPool, id: i32) -> Result<Vec<Pro
     Ok(product_images)
 }
 
-pub async fn find_by_ids(pool: &PgPool, ids: &[i32]) -> Result<HashMap<i32, Product>> {
+pub async fn find_by_ids(pool: &PgPool, ids: &[String]) -> Result<HashMap<String, Product>> {
     let products = sqlx::query_as::<_, Product>(
         "SELECT p.*, b.name as brand_name
          FROM products p LEFT JOIN brands b ON p.brand_id = b.id
@@ -45,13 +45,13 @@ pub async fn find_by_ids(pool: &PgPool, ids: &[i32]) -> Result<HashMap<i32, Prod
     .fetch_all(pool)
     .await?;
 
-    Ok(products.into_iter().map(|p| (p.id, p)).collect())
+    Ok(products.into_iter().map(|p| (p.id.clone(), p)).collect())
 }
 
 pub async fn find_images_by_product_ids(
     pool: &PgPool,
-    ids: &[i32],
-) -> Result<HashMap<i32, Vec<ProductImage>>> {
+    ids: &[String],
+) -> Result<HashMap<String, Vec<ProductImage>>> {
     let images = sqlx::query_as::<_, ProductImage>(
         "SELECT product_id, image_uuid, color, is_primary, extension, quantity
          FROM product_images
@@ -62,9 +62,9 @@ pub async fn find_images_by_product_ids(
     .fetch_all(pool)
     .await?;
 
-    let mut groups: HashMap<i32, Vec<ProductImage>> = HashMap::new();
+    let mut groups: HashMap<String, Vec<ProductImage>> = HashMap::new();
     for img in images {
-        groups.entry(img.product_id).or_default().push(img);
+        groups.entry(img.product_id.clone()).or_default().push(img);
     }
     Ok(groups)
 }
@@ -87,7 +87,7 @@ pub async fn search_products(
     let offset = params.offset.unwrap_or(0);
 
     // If ID is provided, search only by ID
-    if let Some(id) = params.id {
+    if let Some(ref id) = params.id {
         let product = match params.enabled {
             Some(enabled) => {
                 sqlx::query_as::<_, Product>(
@@ -291,7 +291,7 @@ pub async fn search_products(
     }
 
     // fetch images
-    let product_ids: Vec<i32> = results.iter().map(|r| r.product.id).collect();
+    let product_ids: Vec<String> = results.iter().map(|r| r.product.id.clone()).collect();
 
     let images = sqlx::query_as::<_, ProductImage>(
         "SELECT product_id, image_uuid, color, is_primary, extension, quantity
@@ -303,18 +303,18 @@ pub async fn search_products(
     .fetch_all(pool)
     .await?;
 
-    let mut image_groups: HashMap<i32, Vec<ProductImage>> =
+    let mut image_groups: HashMap<String, Vec<ProductImage>> =
         images
             .into_iter()
             .fold(HashMap::with_capacity(product_ids.len()), |mut acc, img| {
-                acc.entry(img.product_id).or_default().push(img);
+                acc.entry(img.product_id.clone()).or_default().push(img);
                 acc
             });
 
     // fetch categories
     #[derive(sqlx::FromRow)]
     struct ProductCategoryRow {
-        product_id: i32,
+        product_id: String,
         #[sqlx(flatten)]
         category: Category,
     }
@@ -330,11 +330,11 @@ pub async fn search_products(
     .fetch_all(pool)
     .await?;
 
-    let mut category_groups: HashMap<i32, Vec<Category>> =
+    let mut category_groups: HashMap<String, Vec<Category>> =
         categories
             .into_iter()
             .fold(HashMap::with_capacity(product_ids.len()), |mut acc, row| {
-                acc.entry(row.product_id).or_default().push(row.category);
+                acc.entry(row.product_id.clone()).or_default().push(row.category);
                 acc
             });
 
@@ -342,9 +342,7 @@ pub async fn search_products(
         .into_iter()
         .map(|result| ProductResponse {
             images: image_groups.remove(&result.product.id).unwrap_or_default(),
-            categories: category_groups
-                .remove(&result.product.id)
-                .unwrap_or_default(),
+            categories: category_groups.remove(&result.product.id).unwrap_or_default(),
             data: result.product,
         })
         .collect();
@@ -424,7 +422,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
     }
 
     // Base IDs: without brand or child-category filters (for brand & category facets)
-    let base_ids: Vec<i32> = filter_builder.build_query_scalar().fetch_all(pool).await?;
+    let base_ids: Vec<String> = filter_builder.build_query_scalar().fetch_all(pool).await?;
 
     if base_ids.is_empty() {
         return Ok(ProductFacets {
@@ -436,7 +434,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
 
     // Apply child-category filter on top of base IDs
     let category_filtered_ids = if !params.child_category_id.is_empty() {
-        sqlx::query_scalar::<_, i32>(
+        sqlx::query_scalar::<_, String>(
             "SELECT DISTINCT p.id FROM products p
              WHERE p.id = ANY($1)
              AND EXISTS (
@@ -461,7 +459,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
 
     // Apply brand filter for fully filtered IDs (colors use this)
     let filtered_ids = if let Some(brand_id) = params.brand {
-        sqlx::query_scalar::<_, i32>(
+        sqlx::query_scalar::<_, String>(
             "SELECT p.id FROM products p WHERE p.id = ANY($1) AND p.brand_id = $2",
         )
         .bind(&category_filtered_ids)
@@ -501,7 +499,7 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
 
     // Category facet: base IDs + brand filter, but NO child-category filter
     let category_facet_ids = if let Some(brand_id) = params.brand {
-        sqlx::query_scalar::<_, i32>(
+        sqlx::query_scalar::<_, String>(
             "SELECT p.id FROM products p WHERE p.id = ANY($1) AND p.brand_id = $2",
         )
         .bind(&base_ids)

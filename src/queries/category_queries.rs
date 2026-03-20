@@ -85,7 +85,7 @@ pub async fn get_category_tree(pool: &PgPool, enabled_only: bool) -> Result<Cate
 }
 
 /// Get categories for a specific product
-pub async fn get_product_categories(pool: &PgPool, product_id: i32) -> Result<Vec<Category>> {
+pub async fn get_product_categories(pool: &PgPool, product_id: &str) -> Result<Vec<Category>> {
     let categories = sqlx::query_as::<_, Category>(
         "SELECT c.* FROM categories c
          INNER JOIN product_categories pc ON c.id = pc.category_id
@@ -214,7 +214,7 @@ pub async fn delete_category(pool: &PgPool, id: i32) -> Result<bool> {
 /// Assign categories to a product
 pub async fn assign_categories_to_product(
     pool: &PgPool,
-    product_id: i32,
+    product_id: &str,
     category_ids: &[i32],
 ) -> Result<()> {
     // First, remove existing associations

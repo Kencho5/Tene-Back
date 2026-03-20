@@ -13,7 +13,7 @@ CREATE TABLE orders (
     organization_name VARCHAR(255),
     organization_code VARCHAR(100),
     email VARCHAR(255) NOT NULL,
-    phone_number BIGINT NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
     address TEXT NOT NULL,
     delivery_type VARCHAR(50) NOT NULL,
     delivery_time VARCHAR(50) NOT NULL,
@@ -25,9 +25,12 @@ CREATE TABLE orders (
 CREATE TABLE order_items (
     id SERIAL PRIMARY KEY,
     order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    product_id INTEGER NOT NULL REFERENCES products(id),
+    product_id TEXT NOT NULL REFERENCES products(id),
     quantity INTEGER NOT NULL CHECK (quantity > 0),
     price_at_purchase DECIMAL(10, 2) NOT NULL,
+    product_name VARCHAR(255) NOT NULL DEFAULT '',
+    product_image JSONB,
+    color VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

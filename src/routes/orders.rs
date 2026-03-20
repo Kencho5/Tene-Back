@@ -48,15 +48,15 @@ pub async fn checkout(
     }
 
     // Aggregate total demand per product+color for accurate stock checks
-    let mut demand: HashMap<(i32, Option<&str>), i32> = HashMap::new();
+    let mut demand: HashMap<(&str, Option<&str>), i32> = HashMap::new();
     for item in &payload.items {
         *demand
-            .entry((item.product_id, item.color.as_deref()))
+            .entry((item.product_id.as_str(), item.color.as_deref()))
             .or_insert(0) += item.quantity;
     }
 
     // Batch-fetch all products and images
-    let requested_ids: Vec<i32> = payload.items.iter().map(|i| i.product_id).collect();
+    let requested_ids: Vec<String> = payload.items.iter().map(|i| i.product_id.clone()).collect();
     let all_products = products_queries::find_by_ids(&state.db, &requested_ids).await?;
     let all_images =
         products_queries::find_images_by_product_ids(&state.db, &requested_ids).await?;
@@ -109,7 +109,7 @@ pub async fn checkout(
         })?;
 
         // Check stock against total demand for this product+color
-        let total_demand = demand[&(item.product_id, item.color.as_deref())];
+        let total_demand = demand[&(item.product_id.as_str(), item.color.as_deref())];
         let stock: i32 = match &item.color {
             Some(color) => images
                 .iter()
@@ -135,7 +135,7 @@ pub async fn checkout(
         total_amount += price * Decimal::from(item.quantity);
 
         order_items.push(OrderItemData {
-            product_id: item.product_id,
+            product_id: item.product_id.clone(),
             color: item.color.clone(),
             quantity: item.quantity,
             price,

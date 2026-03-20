@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct ProductRequest {
-    pub id: Option<i32>,
+    pub id: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,
     pub price: Option<Decimal>,

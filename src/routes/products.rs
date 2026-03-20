@@ -24,14 +24,14 @@ pub async fn search_product(
 
 pub async fn get_product(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    Path(id): Path<String>,
 ) -> Result<Json<ProductResponse>> {
-    let data = products_queries::find_by_id(&state.db, id)
+    let data = products_queries::find_by_id(&state.db, &id)
         .await?
         .ok_or(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()))?;
 
-    let images = products_queries::find_images_by_product_id(&state.db, id).await?;
-    let categories = crate::queries::category_queries::get_product_categories(&state.db, id).await?;
+    let images = products_queries::find_images_by_product_id(&state.db, &id).await?;
+    let categories = crate::queries::category_queries::get_product_categories(&state.db, &id).await?;
 
     Ok(Json(ProductResponse {
         data,

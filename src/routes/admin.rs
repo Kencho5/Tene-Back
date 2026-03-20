@@ -21,6 +21,7 @@ pub async fn create_product(
 ) -> Result<Json<ProductResponse>> {
     let id = payload
         .id
+        .as_ref()
         .ok_or_else(|| AppError::BadRequest("id აუცილებელია".to_string()))?;
 
     if payload.name.is_none() {
@@ -39,8 +40,8 @@ pub async fn create_product(
     }
 
     let product = admin_queries::create_product(&state.db, &payload).await?;
-    let images = products_queries::find_images_by_product_id(&state.db, product.id).await?;
-    let categories = category_queries::get_product_categories(&state.db, product.id).await?;
+    let images = products_queries::find_images_by_product_id(&state.db, &product.id).await?;
+    let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
 
     Ok(Json(ProductResponse {
         data: product,
@@ -51,19 +52,19 @@ pub async fn create_product(
 
 pub async fn update_product(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    Path(id): Path<String>,
     Json(payload): Json<ProductRequest>,
 ) -> Result<Json<ProductResponse>> {
-    if products_queries::find_by_id(&state.db, id).await?.is_none() {
+    if products_queries::find_by_id(&state.db, &id).await?.is_none() {
         return Err(AppError::NotFound(format!(
             "პროდუქტი id-ით {} ვერ მოიძებნა",
             id
         )));
     }
 
-    let product = admin_queries::update_product(&state.db, id, &payload).await?;
-    let images = products_queries::find_images_by_product_id(&state.db, product.id).await?;
-    let categories = category_queries::get_product_categories(&state.db, product.id).await?;
+    let product = admin_queries::update_product(&state.db, &id, &payload).await?;
+    let images = products_queries::find_images_by_product_id(&state.db, &product.id).await?;
+    let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
 
     Ok(Json(ProductResponse {
         data: product,
@@ -74,9 +75,9 @@ pub async fn update_product(
 
 pub async fn delete_product(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    Path(id): Path<String>,
 ) -> Result<StatusCode> {
-    if products_queries::find_by_id(&state.db, id).await?.is_none() {
+    if products_queries::find_by_id(&state.db, &id).await?.is_none() {
         return Err(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()));
     }
 
@@ -91,13 +92,13 @@ pub async fn delete_product(
         .await
         .map_err(|e| AppError::InternalError(format!("S3-დან სურათების წაშლა ვერ მოხერხდა: {}", e)))?;
 
-    admin_queries::delete_product(&state.db, id).await?;
+    admin_queries::delete_product(&state.db, &id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 pub async fn generate_product_urls(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    Path(id): Path<String>,
     Json(payload): Json<ProductImageUrlRequest>,
 ) -> Result<Json<ProductImageUrlResponse>> {
     let mut responses = Vec::new();
@@ -132,7 +133,7 @@ pub async fn generate_product_urls(
 
         admin_queries::add_product_image(
             &state.db,
-            id,
+            &id,
             image_uuid,
             req.color,
             req.is_primary,
@@ -153,9 +154,9 @@ pub async fn generate_product_urls(
 
 pub async fn delete_product_image(
     State(state): State<AppState>,
-    Path((product_id, image_uuid)): Path<(i32, Uuid)>,
+    Path((product_id, image_uuid)): Path<(String, Uuid)>,
 ) -> Result<StatusCode> {
-    let deleted_image = admin_queries::delete_product_image(&state.db, product_id, image_uuid)
+    let deleted_image = admin_queries::delete_product_image(&state.db, &product_id, image_uuid)
         .await?
         .ok_or_else(|| {
             AppError::NotFound(format!(
@@ -183,7 +184,7 @@ pub async fn delete_product_image(
 
 pub async fn update_product_image_metadata(
     State(state): State<AppState>,
-    Path((product_id, image_uuid)): Path<(i32, Uuid)>,
+    Path((product_id, image_uuid)): Path<(String, Uuid)>,
     Json(payload): Json<ImageMetadataUpdate>,
 ) -> Result<Json<ProductImage>> {
     if payload.color.is_none() && payload.is_primary.is_none() && payload.quantity.is_none() {
@@ -194,7 +195,7 @@ pub async fn update_product_image_metadata(
 
     let updated_image = admin_queries::update_product_image_metadata(
         &state.db,
-        product_id,
+        &product_id,
         image_uuid,
         payload.color,
         payload.is_primary,
@@ -477,10 +478,10 @@ pub struct AssignCategoriesRequest {
 
 pub async fn assign_categories_to_product(
     State(state): State<AppState>,
-    Path(product_id): Path<i32>,
+    Path(product_id): Path<String>,
     Json(payload): Json<AssignCategoriesRequest>,
 ) -> Result<StatusCode> {
-    if products_queries::find_by_id(&state.db, product_id)
+    if products_queries::find_by_id(&state.db, &product_id)
         .await?
         .is_none()
     {
@@ -502,7 +503,7 @@ pub async fn assign_categories_to_product(
         }
     }
 
-    category_queries::assign_categories_to_product(&state.db, product_id, &payload.category_ids)
+    category_queries::assign_categories_to_product(&state.db, &product_id, &payload.category_ids)
         .await?;
 
     Ok(StatusCode::NO_CONTENT)
