@@ -52,6 +52,14 @@ pub async fn get_product_facets(
     Ok(Json(facets))
 }
 
+pub async fn get_related_products(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<ProductResponse>>> {
+    let related = products_queries::get_related_products(&state.db, &id, 12).await?;
+    Ok(Json(related))
+}
+
 pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>>> {
     let brands = admin_queries::get_brands(&state.db).await?;
     Ok(Json(brands))

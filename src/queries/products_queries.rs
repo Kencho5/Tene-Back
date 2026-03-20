@@ -355,6 +355,60 @@ pub async fn search_products(
     })
 }
 
+pub async fn get_related_products(
+    pool: &PgPool,
+    product_id: &str,
+    limit: i64,
+) -> Result<Vec<ProductResponse>> {
+    let products = sqlx::query_as::<_, Product>(
+        "SELECT p.*, b.name as brand_name
+         FROM products p
+         LEFT JOIN brands b ON p.brand_id = b.id
+         WHERE p.id != $1
+           AND p.enabled = true
+           AND EXISTS (
+               SELECT 1 FROM product_categories pc
+               WHERE pc.product_id = p.id
+               AND pc.category_id IN (
+                   SELECT category_id FROM product_categories WHERE product_id = $1
+               )
+           )
+         ORDER BY (
+             SELECT COUNT(*) FROM product_categories pc
+             WHERE pc.product_id = p.id
+             AND pc.category_id IN (
+                 SELECT category_id FROM product_categories WHERE product_id = $1
+             )
+         ) DESC, p.created_at DESC
+         LIMIT $2",
+    )
+    .bind(product_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    if products.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let product_ids: Vec<String> = products.iter().map(|p| p.id.clone()).collect();
+    let mut image_groups = find_images_by_product_ids(pool, &product_ids).await?;
+
+    let responses = products
+        .into_iter()
+        .map(|product| {
+            let images = image_groups.remove(&product.id).unwrap_or_default();
+            ProductResponse {
+                data: product,
+                images,
+                categories: Vec::new(),
+            }
+        })
+        .collect();
+
+    Ok(responses)
+}
+
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
     let mut filter_builder =
         sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.id FROM products p WHERE 1=1");

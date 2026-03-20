@@ -48,6 +48,7 @@ fn products_routes() -> Router<AppState> {
         .route("/products", get(products::search_product))
         .route("/products/facets", get(products::get_product_facets))
         .route("/products/{id}", get(products::get_product))
+        .route("/products/{id}/related", get(products::get_related_products))
         .route("/brands", get(products::get_brands))
 }
 
