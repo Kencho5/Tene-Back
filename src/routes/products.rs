@@ -2,12 +2,14 @@ use axum::{
     Json,
     extract::{Path, Query, State},
 };
+use http::StatusCode;
 
 use crate::{
     AppState,
     error::{AppError, Result},
     models::{Brand, ProductFacets, ProductQuery, ProductResponse, ProductSearchResponse},
     queries::{admin_queries, products_queries},
+    utils::extractors::OptionalClaims,
 };
 
 pub async fn search_product(
@@ -31,7 +33,8 @@ pub async fn get_product(
         .ok_or(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()))?;
 
     let images = products_queries::find_images_by_product_id(&state.db, &id).await?;
-    let categories = crate::queries::category_queries::get_product_categories(&state.db, &id).await?;
+    let categories =
+        crate::queries::category_queries::get_product_categories(&state.db, &id).await?;
 
     Ok(Json(ProductResponse {
         data,
@@ -63,4 +66,15 @@ pub async fn get_related_products(
 pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>>> {
     let brands = admin_queries::get_brands(&state.db).await?;
     Ok(Json(brands))
+}
+
+pub async fn add_product_views(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    OptionalClaims(claims): OptionalClaims,
+) -> Result<StatusCode> {
+    let user_id = claims.map(|c| c.user_id);
+    products_queries::add_product_views(&state.db, &id, user_id).await?;
+
+    Ok(StatusCode::CREATED)
 }

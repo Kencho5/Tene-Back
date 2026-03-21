@@ -334,7 +334,9 @@ pub async fn search_products(
         categories
             .into_iter()
             .fold(HashMap::with_capacity(product_ids.len()), |mut acc, row| {
-                acc.entry(row.product_id.clone()).or_default().push(row.category);
+                acc.entry(row.product_id.clone())
+                    .or_default()
+                    .push(row.category);
                 acc
             });
 
@@ -342,7 +344,9 @@ pub async fn search_products(
         .into_iter()
         .map(|result| ProductResponse {
             images: image_groups.remove(&result.product.id).unwrap_or_default(),
-            categories: category_groups.remove(&result.product.id).unwrap_or_default(),
+            categories: category_groups
+                .remove(&result.product.id)
+                .unwrap_or_default(),
             data: result.product,
         })
         .collect();
@@ -618,4 +622,18 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         colors,
         categories,
     })
+}
+
+pub async fn add_product_views(
+    pool: &PgPool,
+    product_id: &str,
+    user_id: Option<i32>,
+) -> Result<()> {
+    sqlx::query("INSERT INTO product_views(product_id, user_id) VALUES($1, $2)")
+        .bind(product_id)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+
+    Ok(())
 }
