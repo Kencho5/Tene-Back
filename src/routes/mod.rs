@@ -128,6 +128,8 @@ fn admin_routes() -> Router<AppState> {
         .route("/admin/brands", post(admin::create_brand))
         .route("/admin/brands/{id}", put(admin::update_brand))
         .route("/admin/brands/{id}", delete(admin::delete_brand))
+        //ADMIN ANALYTICS
+        .route("/admin/analytics", get(admin::get_analytics))
         //ADMIN USERS
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))

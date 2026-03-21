@@ -2,6 +2,7 @@ use crate::models::user::UserRole;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
@@ -109,4 +110,59 @@ pub struct OrderSearchResponse {
     pub total: i64,
     pub limit: i64,
     pub offset: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct MostViewedProduct {
+    pub product_id: String,
+    pub product_name: String,
+    pub views: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct TrendingProduct {
+    pub product_id: String,
+    pub product_name: String,
+    pub views: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct UniqueViewersProduct {
+    pub product_id: String,
+    pub product_name: String,
+    pub unique_viewers: i64,
+    pub total_views: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct ViewsByHour {
+    pub hour: f64,
+    pub views: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct HighViewsLowSales {
+    pub product_id: String,
+    pub product_name: String,
+    pub views: i64,
+    pub sold: i64,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct ConversionRate {
+    pub product_id: String,
+    pub product_name: String,
+    pub viewers: i64,
+    pub purchases: i64,
+    pub conversion_pct: Decimal,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AnalyticsResponse {
+    pub most_viewed: Vec<MostViewedProduct>,
+    pub trending_this_week: Vec<TrendingProduct>,
+    pub unique_viewers: Vec<UniqueViewersProduct>,
+    pub views_by_hour: Vec<ViewsByHour>,
+    pub high_views_low_sales: Vec<HighViewsLowSales>,
+    pub conversion_rates: Vec<ConversionRate>,
 }

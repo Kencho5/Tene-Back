@@ -3,8 +3,10 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        Brand, Order, OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest,
-        UserQuery, UserRequest, UserResponse, UserSearchResponse,
+        AnalyticsResponse, Brand, ConversionRate, HighViewsLowSales, MostViewedProduct, Order,
+        OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, TrendingProduct,
+        UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
+        ViewsByHour,
     },
 };
 
@@ -356,5 +358,95 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         total,
         limit,
         offset,
+    })
+}
+
+pub async fn get_analytics(pool: &PgPool) -> Result<AnalyticsResponse> {
+    let most_viewed = sqlx::query_as::<_, MostViewedProduct>(
+        "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
+         FROM product_views pv
+         JOIN products p ON p.id = pv.product_id
+         GROUP BY pv.product_id, p.name
+         ORDER BY views DESC
+         LIMIT 10",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let trending_this_week = sqlx::query_as::<_, TrendingProduct>(
+        "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
+         FROM product_views pv
+         JOIN products p ON p.id = pv.product_id
+         WHERE pv.viewed_at >= NOW() - INTERVAL '7 days'
+         GROUP BY pv.product_id, p.name
+         ORDER BY views DESC
+         LIMIT 10",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let unique_viewers = sqlx::query_as::<_, UniqueViewersProduct>(
+        "SELECT pv.product_id, p.name as product_name,
+                COUNT(DISTINCT pv.user_id) as unique_viewers,
+                COUNT(*) as total_views
+         FROM product_views pv
+         JOIN products p ON p.id = pv.product_id
+         GROUP BY pv.product_id, p.name
+         ORDER BY unique_viewers DESC
+         LIMIT 10",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let views_by_hour = sqlx::query_as::<_, ViewsByHour>(
+        "SELECT EXTRACT(HOUR FROM viewed_at) as hour, COUNT(*) as views
+         FROM product_views
+         GROUP BY hour
+         ORDER BY hour",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let high_views_low_sales = sqlx::query_as::<_, HighViewsLowSales>(
+        "SELECT p.id as product_id, p.name as product_name,
+                COUNT(pv.id) as views,
+                COALESCE(SUM(oi.quantity), 0) as sold
+         FROM products p
+         LEFT JOIN product_views pv ON pv.product_id = p.id
+         LEFT JOIN order_items oi ON oi.product_id = p.id
+         GROUP BY p.id, p.name
+         HAVING COUNT(pv.id) > 0 AND COALESCE(SUM(oi.quantity), 0) = 0
+         ORDER BY views DESC
+         LIMIT 10",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let conversion_rates = sqlx::query_as::<_, ConversionRate>(
+        "SELECT p.id as product_id, p.name as product_name,
+                COUNT(DISTINCT pv.user_id) as viewers,
+                COUNT(DISTINCT oi.order_id) as purchases,
+                ROUND(
+                    COUNT(DISTINCT oi.order_id)::numeric /
+                    NULLIF(COUNT(DISTINCT pv.user_id), 0) * 100, 2
+                ) as conversion_pct
+         FROM products p
+         LEFT JOIN product_views pv ON pv.product_id = p.id
+         LEFT JOIN order_items oi ON oi.product_id = p.id
+         GROUP BY p.id, p.name
+         HAVING COUNT(DISTINCT pv.user_id) > 0
+         ORDER BY conversion_pct DESC
+         LIMIT 10",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(AnalyticsResponse {
+        most_viewed,
+        trending_this_week,
+        unique_viewers,
+        views_by_hour,
+        high_views_low_sales,
+        conversion_rates,
     })
 }

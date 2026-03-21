@@ -666,3 +666,10 @@ pub async fn get_orders(
     let response = admin_queries::get_orders(&state.db, params).await?;
     Ok(Json(response))
 }
+
+pub async fn get_analytics(
+    State(state): State<AppState>,
+) -> Result<Json<AnalyticsResponse>> {
+    let analytics = admin_queries::get_analytics(&state.db).await?;
+    Ok(Json(analytics))
+}
