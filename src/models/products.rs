@@ -52,6 +52,7 @@ pub struct ProductSearchResponse {
 pub enum SortBy {
     PriceAsc,
     PriceDesc,
+    ViewsDesc,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

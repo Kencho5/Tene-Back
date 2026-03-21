@@ -164,7 +164,7 @@ pub async fn search_products(
         query_builder.push("0");
     }
     query_builder
-        .push(" as relevance_score, COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE 1=1");
+        .push(" as relevance_score, COALESCE(pv.view_count, 0) as view_count, COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id LEFT JOIN (SELECT product_id, COUNT(*) as view_count FROM product_views GROUP BY product_id) pv ON pv.product_id = p.id WHERE 1=1");
 
     if let Some(enabled) = params.enabled {
         query_builder.push(" AND p.enabled = ");
@@ -256,6 +256,9 @@ pub async fn search_products(
         }
         Some(SortBy::PriceDesc) => {
             query_builder.push(" ORDER BY p.price DESC, relevance_score DESC, p.created_at DESC");
+        }
+        Some(SortBy::ViewsDesc) => {
+            query_builder.push(" ORDER BY view_count DESC, relevance_score DESC, p.created_at DESC");
         }
         None => {
             query_builder.push(" ORDER BY relevance_score DESC, p.created_at DESC");
