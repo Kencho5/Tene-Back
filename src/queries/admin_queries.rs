@@ -387,12 +387,13 @@ pub async fn get_analytics(pool: &PgPool) -> Result<AnalyticsResponse> {
 
     let unique_viewers = sqlx::query_as::<_, UniqueViewersProduct>(
         "SELECT pv.product_id, p.name as product_name,
-                COUNT(DISTINCT pv.user_id) as unique_viewers,
+                COUNT(DISTINCT pv.user_id) as logged_in_viewers,
+                COUNT(*) FILTER (WHERE pv.user_id IS NULL) as anonymous_views,
                 COUNT(*) as total_views
          FROM product_views pv
          JOIN products p ON p.id = pv.product_id
          GROUP BY pv.product_id, p.name
-         ORDER BY unique_viewers DESC
+         ORDER BY total_views DESC
          LIMIT 10",
     )
     .fetch_all(pool)

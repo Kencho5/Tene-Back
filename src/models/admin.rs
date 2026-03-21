@@ -130,7 +130,8 @@ pub struct TrendingProduct {
 pub struct UniqueViewersProduct {
     pub product_id: String,
     pub product_name: String,
-    pub unique_viewers: i64,
+    pub logged_in_viewers: i64,
+    pub anonymous_views: i64,
     pub total_views: i64,
 }
 
