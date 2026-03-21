@@ -136,7 +136,7 @@ pub struct UniqueViewersProduct {
 
 #[derive(Debug, Serialize, FromRow)]
 pub struct ViewsByHour {
-    pub hour: f64,
+    pub hour: Decimal,
     pub views: i64,
 }
 
