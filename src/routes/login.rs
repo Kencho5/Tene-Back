@@ -3,7 +3,7 @@ use axum::{Json, extract::State};
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{AuthResponse, LoginRequest},
+    models::{AuthResponse, LoginRequest, UserRole},
     queries::user_queries,
     utils::jwt,
 };
@@ -30,7 +30,12 @@ pub async fn login_user(
         ));
     }
 
-    let token = jwt::generate_token(user.id, &user.email, &user.name, user.role)?;
+    let duration = match user.role {
+        UserRole::Admin => chrono::Duration::hours(3),
+        _ => chrono::Duration::days(30),
+    };
+
+    let token = jwt::generate_token(user.id, &user.email, &user.name, user.role, duration)?;
 
     Ok(Json(AuthResponse { token }))
 }

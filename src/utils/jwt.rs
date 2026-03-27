@@ -15,12 +15,12 @@ pub struct Claims {
     pub exp: usize,
 }
 
-pub fn generate_token(user_id: i32, email: &str, name: &str, role: UserRole) -> Result<String> {
+pub fn generate_token(user_id: i32, email: &str, name: &str, role: UserRole, duration: chrono::Duration) -> Result<String> {
     let jwt_secret = env::var("JWT_SECRET")
         .map_err(|_| AppError::ConfigError("JWT_SECRET not set".to_string()))?;
 
     let expiration = chrono::Utc::now()
-        .checked_add_signed(chrono::Duration::days(30))
+        .checked_add_signed(duration)
         .ok_or_else(|| AppError::InternalError("ვადის გამოთვლა ვერ მოხერხდა".to_string()))?
         .timestamp() as usize;
 
