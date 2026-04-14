@@ -158,6 +158,22 @@ pub struct ConversionRate {
     pub conversion_pct: Decimal,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalyticsPeriod {
+    Today,
+    Yesterday,
+    #[serde(rename = "7days")]
+    Last7Days,
+    #[serde(rename = "30days")]
+    Last30Days,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnalyticsQuery {
+    pub period: Option<AnalyticsPeriod>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AnalyticsResponse {
     pub most_viewed: Vec<MostViewedProduct>,
