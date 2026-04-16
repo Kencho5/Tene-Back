@@ -24,6 +24,7 @@ pub struct Order {
     pub address: String,
     pub delivery_type: String,
     pub delivery_time: String,
+    pub comment: Option<String>,
     pub checkout_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -81,6 +82,7 @@ pub struct CheckoutRequest {
     pub address: String,
     pub delivery_type: String,
     pub delivery_time: String,
+    pub comment: Option<String>,
     pub items: Vec<CartItem>,
 }
 

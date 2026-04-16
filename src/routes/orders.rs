@@ -34,7 +34,7 @@ pub async fn checkout(
         return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
     }
 
-    if payload.address.is_empty() {
+    if payload.delivery_type != "pickup" && payload.address.is_empty() {
         return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
     }
 

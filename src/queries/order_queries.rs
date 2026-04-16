@@ -43,8 +43,8 @@ pub async fn create_order_with_items(
     let order = sqlx::query_as::<_, Order>(
         "INSERT INTO orders (user_id, order_id, amount, customer_type, customer_name, customer_surname,
          organization_type, organization_name, organization_code, email, phone_number, address,
-         delivery_type, delivery_time)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         delivery_type, delivery_time, comment)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING *",
     )
     .bind(user_id)
@@ -61,6 +61,7 @@ pub async fn create_order_with_items(
     .bind(&req.address)
     .bind(&req.delivery_type)
     .bind(&req.delivery_time)
+    .bind(&req.comment)
     .fetch_one(&mut *tx)
     .await?;
 
