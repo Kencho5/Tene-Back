@@ -1,0 +1,3 @@
+ALTER TABLE orders
+    ADD COLUMN city VARCHAR(255),
+    ADD COLUMN details TEXT;

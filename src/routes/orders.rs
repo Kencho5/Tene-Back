@@ -34,8 +34,13 @@ pub async fn checkout(
         return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
     }
 
-    if payload.delivery_type != "pickup" && payload.address.is_empty() {
-        return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
+    if payload.delivery_type != "pickup" {
+        if payload.address.is_empty() {
+            return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
+        }
+        if payload.city.as_deref().unwrap_or("").is_empty() {
+            return Err(AppError::BadRequest("ქალაქი აუცილებელია".to_string()));
+        }
     }
 
     for item in &payload.items {
