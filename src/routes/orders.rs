@@ -150,10 +150,12 @@ pub async fn checkout(
         });
     }
 
-    let delivery = if payload.delivery_time == "same_day" && payload.delivery_type != "pickup" {
+    let delivery = if payload.delivery_type == "pickup" {
+        Decimal::ZERO
+    } else if payload.delivery_time == "same_day" {
         dec!(12)
     } else {
-        Decimal::ZERO
+        dec!(5)
     };
 
     let amount_tetri = ((total_amount + delivery) * Decimal::from(100))
