@@ -155,7 +155,7 @@ pub async fn checkout(
     } else if payload.delivery_time == "same_day" {
         dec!(12)
     } else {
-        dec!(5)
+        dec!(5.50)
     };
 
     let amount_tetri = ((total_amount + delivery) * Decimal::from(100))
