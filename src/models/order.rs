@@ -42,7 +42,15 @@ pub struct OrderItem {
     pub price_at_purchase: Decimal,
     pub product_name: String,
     pub product_image: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cable_config: Option<serde_json::Value>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CableConfig {
+    pub watts: i32,
+    pub length_cm: i32,
 }
 
 #[derive(Debug, Serialize)]
@@ -73,6 +81,7 @@ pub struct CartItem {
     pub product_id: String,
     pub color: Option<String>,
     pub quantity: i32,
+    pub cable_config: Option<CableConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -99,6 +108,7 @@ pub struct OrderItemData {
     pub price: Decimal,
     pub product_name: String,
     pub image: serde_json::Value,
+    pub cable_config: Option<serde_json::Value>,
 }
 
 // Response types

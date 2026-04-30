@@ -73,10 +73,12 @@ pub async fn create_order_with_items(
     let prices: Vec<Decimal> = items.iter().map(|i| i.price).collect();
     let product_names: Vec<&str> = items.iter().map(|i| i.product_name.as_str()).collect();
     let product_images: Vec<serde_json::Value> = items.iter().map(|i| i.image.clone()).collect();
+    let cable_configs: Vec<Option<serde_json::Value>> =
+        items.iter().map(|i| i.cable_config.clone()).collect();
 
     sqlx::query(
-        "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image)
-         SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[])",
+        "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image, cable_config)
+         SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[]), unnest($8::jsonb[])",
     )
     .bind(order.id)
     .bind(&product_ids)
@@ -85,6 +87,7 @@ pub async fn create_order_with_items(
     .bind(&prices)
     .bind(&product_names)
     .bind(&product_images)
+    .bind(&cable_configs)
     .execute(&mut *tx)
     .await?;
 

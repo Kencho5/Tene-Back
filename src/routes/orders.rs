@@ -7,6 +7,7 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use rust_decimal::{Decimal, dec, prelude::ToPrimitive};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
@@ -49,6 +50,14 @@ pub async fn checkout(
                 "არასწორი რაოდენობა პროდუქტისთვის {}",
                 item.product_id
             )));
+        }
+        if let Some(cfg) = &item.cable_config {
+            if cable_price(cfg.watts, cfg.length_cm).is_none() {
+                return Err(AppError::BadRequest(format!(
+                    "არასწორი კაბელის კონფიგურაცია პროდუქტისთვის {}",
+                    item.product_id
+                )));
+            }
         }
     }
 
@@ -131,13 +140,20 @@ pub async fn checkout(
             )));
         }
 
-        let price = if product.discount > Decimal::ZERO {
+        let price = if let Some(cfg) = &item.cable_config {
+            Decimal::from(cable_price(cfg.watts, cfg.length_cm).unwrap())
+        } else if product.discount > Decimal::ZERO {
             product.price * (Decimal::ONE - product.discount / Decimal::from(100))
         } else {
             product.price
         };
 
         total_amount += price * Decimal::from(item.quantity);
+
+        let cable_config_json = item
+            .cable_config
+            .as_ref()
+            .map(|c| json!({ "watts": c.watts, "length_cm": c.length_cm }));
 
         order_items.push(OrderItemData {
             product_id: item.product_id.clone(),
@@ -147,6 +163,7 @@ pub async fn checkout(
             product_name: product.name.clone(),
             image: serde_json::to_value(image)
                 .map_err(|e| AppError::InternalError(e.to_string()))?,
+            cable_config: cable_config_json,
         });
     }
 
@@ -317,4 +334,17 @@ pub async fn get_orders(
         .collect();
 
     Ok(Json(response))
+}
+
+const CABLE_LENGTHS: [i32; 13] = [20, 50, 70, 100, 130, 150, 200, 250, 300, 350, 400, 450, 500];
+const CABLE_PRICE_67: [i32; 13] = [15, 20, 22, 25, 30, 35, 37, 40, 45, 50, 55, 60, 65];
+const CABLE_PRICE_120: [i32; 13] = [25, 35, 40, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95];
+
+fn cable_price(watts: i32, length_cm: i32) -> Option<i32> {
+    let idx = CABLE_LENGTHS.iter().position(|&l| l == length_cm)?;
+    match watts {
+        67 => Some(CABLE_PRICE_67[idx]),
+        120 => Some(CABLE_PRICE_120[idx]),
+        _ => None,
+    }
 }
