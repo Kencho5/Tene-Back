@@ -124,6 +124,7 @@ pub async fn generate_product_urls(
             &state.s3_bucket,
             &key,
             &req.content_type,
+            "public, max-age=31536000, immutable",
             900,
         )
         .await
@@ -542,6 +543,7 @@ pub async fn generate_category_image_url(
         &state.s3_bucket,
         &key,
         &payload.content_type,
+        "public, max-age=31536000, immutable",
         900,
     )
     .await
