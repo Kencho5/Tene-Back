@@ -536,6 +536,16 @@ pub async fn generate_category_image_url(
         crate::config::Environment::Main => "categories-main",
     };
 
+    if let Some(existing) = category_queries::get_category_image(&state.db, id).await? {
+        let old_key = format!(
+            "{}/{}/{}.{}",
+            env_prefix, id, existing.image_uuid, existing.extension
+        );
+        delete_single_object(&state.s3_client, &state.s3_bucket, &old_key)
+            .await
+            .map_err(|e| AppError::InternalError(format!("S3-დან ძველი სურათის წაშლა ვერ მოხერხდა: {}", e)))?;
+    }
+
     let key = format!("{}/{}/{}.{}", env_prefix, id, image_uuid, extension);
 
     let upload_url = put_object_url(
