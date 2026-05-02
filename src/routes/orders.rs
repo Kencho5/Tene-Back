@@ -6,19 +6,45 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
-use rust_decimal::{Decimal, dec, prelude::ToPrimitive};
+use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde_json::json;
 use uuid::Uuid;
 
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
+    models::{CartItem, CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
     queries::{order_queries, products_queries},
-    services::flitt_service,
+    services::{delivery_service, flitt_service},
     utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
+
+const CABLE_PRICES: &[(i32, i32, i32)] = &[
+    // (length_cm, price_67w, price_120w)
+    (20, 15, 25),
+    (50, 20, 35),
+    (70, 22, 40),
+    (100, 25, 50),
+    (130, 30, 55),
+    (150, 35, 60),
+    (200, 37, 65),
+    (250, 40, 70),
+    (300, 45, 75),
+    (350, 50, 80),
+    (400, 55, 85),
+    (450, 60, 90),
+    (500, 65, 95),
+];
+
+fn cable_price(watts: i32, length_cm: i32) -> Option<i32> {
+    let row = CABLE_PRICES.iter().find(|(l, _, _)| *l == length_cm)?;
+    match watts {
+        67 => Some(row.1),
+        120 => Some(row.2),
+        _ => None,
+    }
+}
 
 pub async fn checkout(
     State(state): State<AppState>,
@@ -27,176 +53,18 @@ pub async fn checkout(
 ) -> Result<Json<CheckoutResponse>> {
     let user_id = claims.as_ref().and_then(|c| extract_user_id(c).ok());
 
-    if payload.items.is_empty() {
-        return Err(AppError::BadRequest("კალათა ცარიელია".to_string()));
-    }
+    validate_checkout_request(&payload)?;
 
-    if payload.email.is_empty() || !payload.email.contains('@') {
-        return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
-    }
+    let (order_items, subtotal) = build_order_items(&state, &payload).await?;
 
-    if payload.delivery_type != "pickup" {
-        if payload.address.is_empty() {
-            return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
-        }
-        if payload.city.as_deref().unwrap_or("").is_empty() {
-            return Err(AppError::BadRequest("ქალაქი აუცილებელია".to_string()));
-        }
-    }
+    let delivery = delivery_service::calculate_delivery(
+        &payload.delivery_type,
+        &payload.delivery_time,
+        payload.city.as_deref(),
+        subtotal,
+    )?;
 
-    for item in &payload.items {
-        if item.quantity <= 0 {
-            return Err(AppError::BadRequest(format!(
-                "არასწორი რაოდენობა პროდუქტისთვის {}",
-                item.product_id
-            )));
-        }
-        if let Some(cfg) = &item.cable_config {
-            if cable_price(cfg.watts, cfg.length_cm).is_none() {
-                return Err(AppError::BadRequest(format!(
-                    "არასწორი კაბელის კონფიგურაცია პროდუქტისთვის {}",
-                    item.product_id
-                )));
-            }
-        }
-    }
-
-    // Aggregate total demand per product+color for accurate stock checks
-    let mut demand: HashMap<(&str, Option<&str>), i32> = HashMap::new();
-    for item in &payload.items {
-        *demand
-            .entry((item.product_id.as_str(), item.color.as_deref()))
-            .or_insert(0) += item.quantity;
-    }
-
-    // Batch-fetch all products and images
-    let requested_ids: Vec<String> = payload.items.iter().map(|i| i.product_id.clone()).collect();
-    let all_products = products_queries::find_by_ids(&state.db, &requested_ids).await?;
-    let all_images =
-        products_queries::find_images_by_product_ids(&state.db, &requested_ids).await?;
-
-    let mut total_amount = Decimal::ZERO;
-    let mut order_items = Vec::with_capacity(payload.items.len());
-
-    for item in &payload.items {
-        let product = all_products.get(&item.product_id).ok_or_else(|| {
-            AppError::NotFound(format!("პროდუქტი {} ვერ მოიძებნა", item.product_id))
-        })?;
-
-        if !product.enabled {
-            return Err(AppError::BadRequest(format!(
-                "პროდუქტი {} მიუწვდომელია",
-                item.product_id
-            )));
-        }
-
-        let images = all_images
-            .get(&item.product_id)
-            .map(|v| v.as_slice())
-            .unwrap_or_default();
-
-        // Require color when product has multiple color variants
-        let distinct_colors: HashSet<_> = images
-            .iter()
-            .filter_map(|img| img.color.as_deref())
-            .collect();
-
-        if distinct_colors.len() > 1 && item.color.is_none() {
-            return Err(AppError::BadRequest(format!(
-                "ფერი აუცილებელია პროდუქტისთვის {}",
-                item.product_id
-            )));
-        }
-
-        // Find the matching image for display
-        let image = match &item.color {
-            Some(color) => images
-                .iter()
-                .find(|img| img.color.as_deref() == Some(color.as_str())),
-            None => images.iter().find(|img| img.is_primary).or(images.first()),
-        }
-        .ok_or_else(|| {
-            AppError::BadRequest(format!(
-                "ფერი მიუწვდომელია პროდუქტისთვის {}",
-                item.product_id
-            ))
-        })?;
-
-        // Check stock against total demand for this product+color
-        let total_demand = demand[&(item.product_id.as_str(), item.color.as_deref())];
-        let stock: i32 = match &item.color {
-            Some(color) => images
-                .iter()
-                .filter(|img| img.color.as_deref() == Some(color.as_str()))
-                .map(|img| img.quantity)
-                .sum(),
-            None => image.quantity,
-        };
-
-        if stock < total_demand {
-            return Err(AppError::BadRequest(format!(
-                "არასაკმარისი მარაგი პროდუქტისთვის {}",
-                item.product_id
-            )));
-        }
-
-        let price = if let Some(cfg) = &item.cable_config {
-            Decimal::from(cable_price(cfg.watts, cfg.length_cm).unwrap())
-        } else if product.discount > Decimal::ZERO {
-            product.price * (Decimal::ONE - product.discount / Decimal::from(100))
-        } else {
-            product.price
-        };
-
-        total_amount += price * Decimal::from(item.quantity);
-
-        let cable_config_json = item
-            .cable_config
-            .as_ref()
-            .map(|c| json!({ "watts": c.watts, "length_cm": c.length_cm }));
-
-        order_items.push(OrderItemData {
-            product_id: item.product_id.clone(),
-            color: item.color.clone(),
-            quantity: item.quantity,
-            price,
-            product_name: product.name.clone(),
-            image: serde_json::to_value(image)
-                .map_err(|e| AppError::InternalError(e.to_string()))?,
-            cable_config: cable_config_json,
-        });
-    }
-
-    let delivery = if payload.delivery_type == "pickup" {
-        Decimal::ZERO
-    } else {
-        let city = payload.city.as_deref().unwrap_or("");
-        let is_tbilisi = city == "თბილისი";
-        let is_high_mountain = matches!(
-            city,
-            "სვანეთი" | "რაჭა" | "ხევსურეთი" | "თუშეთი" | "ზემო აჭარა"
-        );
-
-        if payload.delivery_time == "same_day" && !is_tbilisi {
-            return Err(AppError::BadRequest(
-                "იმავე დღეს მიწოდება ხელმისაწვდომია მხოლოდ თბილისში".to_string(),
-            ));
-        }
-
-        if is_tbilisi {
-            if payload.delivery_time == "same_day" {
-                dec!(12)
-            } else {
-                dec!(5.50)
-            }
-        } else if is_high_mountain {
-            dec!(13.50)
-        } else {
-            dec!(8.50)
-        }
-    };
-
-    let amount_tetri = ((total_amount + delivery) * Decimal::from(100))
+    let amount_tetri = ((subtotal + delivery) * Decimal::from(100))
         .trunc()
         .to_i32()
         .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
@@ -239,6 +107,157 @@ pub async fn checkout(
         order_id,
         checkout_url,
     }))
+}
+
+fn validate_checkout_request(payload: &CheckoutRequest) -> Result<()> {
+    if payload.items.is_empty() {
+        return Err(AppError::BadRequest("კალათა ცარიელია".to_string()));
+    }
+
+    if payload.email.is_empty() || !payload.email.contains('@') {
+        return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
+    }
+
+    if payload.delivery_type != "pickup" {
+        if payload.address.is_empty() {
+            return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
+        }
+        if payload.city.as_deref().unwrap_or("").is_empty() {
+            return Err(AppError::BadRequest("ქალაქი აუცილებელია".to_string()));
+        }
+    }
+
+    for item in &payload.items {
+        if item.quantity <= 0 {
+            return Err(AppError::BadRequest(format!(
+                "არასწორი რაოდენობა პროდუქტისთვის {}",
+                item.product_id
+            )));
+        }
+        if let Some(cfg) = &item.cable_config {
+            if cable_price(cfg.watts, cfg.length_cm).is_none() {
+                return Err(AppError::BadRequest(format!(
+                    "არასწორი კაბელის კონფიგურაცია პროდუქტისთვის {}",
+                    item.product_id
+                )));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn build_order_items(
+    state: &AppState,
+    payload: &CheckoutRequest,
+) -> Result<(Vec<OrderItemData>, Decimal)> {
+    let mut demand: HashMap<(&str, Option<&str>), i32> = HashMap::new();
+    for item in &payload.items {
+        *demand
+            .entry((item.product_id.as_str(), item.color.as_deref()))
+            .or_insert(0) += item.quantity;
+    }
+
+    let requested_ids: Vec<String> = payload.items.iter().map(|i| i.product_id.clone()).collect();
+    let all_products = products_queries::find_by_ids(&state.db, &requested_ids).await?;
+    let all_images =
+        products_queries::find_images_by_product_ids(&state.db, &requested_ids).await?;
+
+    let mut subtotal = Decimal::ZERO;
+    let mut order_items = Vec::with_capacity(payload.items.len());
+
+    for item in &payload.items {
+        let product = all_products.get(&item.product_id).ok_or_else(|| {
+            AppError::NotFound(format!("პროდუქტი {} ვერ მოიძებნა", item.product_id))
+        })?;
+
+        if !product.enabled {
+            return Err(AppError::BadRequest(format!(
+                "პროდუქტი {} მიუწვდომელია",
+                item.product_id
+            )));
+        }
+
+        let images = all_images
+            .get(&item.product_id)
+            .map(|v| v.as_slice())
+            .unwrap_or_default();
+
+        let distinct_colors: HashSet<_> = images
+            .iter()
+            .filter_map(|img| img.color.as_deref())
+            .collect();
+
+        if distinct_colors.len() > 1 && item.color.is_none() {
+            return Err(AppError::BadRequest(format!(
+                "ფერი აუცილებელია პროდუქტისთვის {}",
+                item.product_id
+            )));
+        }
+
+        let image = match &item.color {
+            Some(color) => images
+                .iter()
+                .find(|img| img.color.as_deref() == Some(color.as_str())),
+            None => images.iter().find(|img| img.is_primary).or(images.first()),
+        }
+        .ok_or_else(|| {
+            AppError::BadRequest(format!(
+                "ფერი მიუწვდომელია პროდუქტისთვის {}",
+                item.product_id
+            ))
+        })?;
+
+        let total_demand = demand[&(item.product_id.as_str(), item.color.as_deref())];
+        let stock: i32 = match &item.color {
+            Some(color) => images
+                .iter()
+                .filter(|img| img.color.as_deref() == Some(color.as_str()))
+                .map(|img| img.quantity)
+                .sum(),
+            None => image.quantity,
+        };
+
+        if stock < total_demand {
+            return Err(AppError::BadRequest(format!(
+                "არასაკმარისი მარაგი პროდუქტისთვის {}",
+                item.product_id
+            )));
+        }
+
+        let price = item_price(product.price, product.discount, item);
+        subtotal += price * Decimal::from(item.quantity);
+
+        let cable_config_json = item
+            .cable_config
+            .as_ref()
+            .map(|c| json!({ "watts": c.watts, "length_cm": c.length_cm }));
+
+        order_items.push(OrderItemData {
+            product_id: item.product_id.clone(),
+            color: item.color.clone(),
+            quantity: item.quantity,
+            price,
+            product_name: product.name.clone(),
+            image: serde_json::to_value(image)?,
+            cable_config: cable_config_json,
+        });
+    }
+
+    Ok((order_items, subtotal))
+}
+
+fn item_price(base_price: Decimal, discount: Decimal, item: &CartItem) -> Decimal {
+    if let Some(cfg) = &item.cable_config {
+        // Validated upstream — safe to expect
+        return Decimal::from(
+            cable_price(cfg.watts, cfg.length_cm).expect("cable_price validated"),
+        );
+    }
+    if discount > Decimal::ZERO {
+        return base_price * (Decimal::ONE - discount / Decimal::from(100));
+    }
+    base_price
 }
 
 pub async fn flitt_callback(
@@ -350,7 +369,7 @@ pub async fn get_orders(
     let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
     let all_items = order_queries::get_items_for_orders(&state.db, &order_db_ids).await?;
 
-    let mut items_map: std::collections::HashMap<i32, Vec<_>> = std::collections::HashMap::new();
+    let mut items_map: HashMap<i32, Vec<_>> = HashMap::new();
     for item in all_items {
         items_map.entry(item.order_id).or_default().push(item);
     }
@@ -364,17 +383,4 @@ pub async fn get_orders(
         .collect();
 
     Ok(Json(response))
-}
-
-const CABLE_LENGTHS: [i32; 13] = [20, 50, 70, 100, 130, 150, 200, 250, 300, 350, 400, 450, 500];
-const CABLE_PRICE_67: [i32; 13] = [15, 20, 22, 25, 30, 35, 37, 40, 45, 50, 55, 60, 65];
-const CABLE_PRICE_120: [i32; 13] = [25, 35, 40, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95];
-
-fn cable_price(watts: i32, length_cm: i32) -> Option<i32> {
-    let idx = CABLE_LENGTHS.iter().position(|&l| l == length_cm)?;
-    match watts {
-        67 => Some(CABLE_PRICE_67[idx]),
-        120 => Some(CABLE_PRICE_120[idx]),
-        _ => None,
-    }
 }

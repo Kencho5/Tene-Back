@@ -47,6 +47,12 @@ impl From<std::env::VarError> for AppError {
     }
 }
 
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::InternalError(err.to_string())
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
