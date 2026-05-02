@@ -28,13 +28,13 @@ pub async fn get_product(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ProductResponse>> {
-    let data = products_queries::find_by_id(&state.db, &id)
-        .await?
-        .ok_or(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()))?;
+    let (data, images, categories) = tokio::try_join!(
+        products_queries::find_by_id(&state.db, &id),
+        products_queries::find_images_by_product_id(&state.db, &id),
+        crate::queries::category_queries::get_product_categories(&state.db, &id),
+    )?;
 
-    let images = products_queries::find_images_by_product_id(&state.db, &id).await?;
-    let categories =
-        crate::queries::category_queries::get_product_categories(&state.db, &id).await?;
+    let data = data.ok_or(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()))?;
 
     Ok(Json(ProductResponse {
         data,
