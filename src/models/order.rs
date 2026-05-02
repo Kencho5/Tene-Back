@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Order {
     pub id: i32,
-    pub user_id: i32,
+    pub user_id: Option<i32>,
     pub order_id: String,
     pub status: String,
     pub payment_id: Option<i32>,

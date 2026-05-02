@@ -75,11 +75,14 @@ fn user_routes() -> Router<AppState> {
 }
 
 fn checkout_routes() -> Router<AppState> {
+    let authed = Router::new()
+        .route("/orders", get(orders::get_orders))
+        .layer(middleware::from_fn(auth_middleware));
+
     Router::new()
         .route("/checkout", post(orders::checkout))
         .route("/orders/{id}", get(orders::get_order))
-        .route("/orders", get(orders::get_orders))
-        .layer(middleware::from_fn(auth_middleware))
+        .merge(authed)
 }
 
 fn admin_routes() -> Router<AppState> {

@@ -16,16 +16,16 @@ use crate::{
     models::{CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
     queries::{order_queries, products_queries},
     services::flitt_service,
-    utils::extractors::extract_user_id,
+    utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
 
 pub async fn checkout(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    OptionalClaims(claims): OptionalClaims,
     Json(payload): Json<CheckoutRequest>,
 ) -> Result<Json<CheckoutResponse>> {
-    let user_id = extract_user_id(&claims)?;
+    let user_id = claims.as_ref().and_then(|c| extract_user_id(c).ok());
 
     if payload.items.is_empty() {
         return Err(AppError::BadRequest("კალათა ცარიელია".to_string()));
@@ -318,13 +318,22 @@ pub async fn payment_redirect(
 
 pub async fn get_order(
     State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
+    OptionalClaims(claims): OptionalClaims,
     Path(order_id): Path<String>,
 ) -> Result<Json<OrderResponse>> {
-    let user_id = extract_user_id(&claims)?;
-    let order = order_queries::get_user_order(&state.db, user_id, &order_id)
+    let order = order_queries::get_order_by_order_id(&state.db, &order_id)
         .await?
         .ok_or_else(|| AppError::NotFound("შეკვეთა ვერ მოიძებნა".to_string()))?;
+
+    if let Some(owner_id) = order.user_id {
+        let viewer_id = claims
+            .as_ref()
+            .and_then(|c| extract_user_id(c).ok())
+            .ok_or_else(|| AppError::Unauthorized("არაავტორიზებული".to_string()))?;
+        if viewer_id != owner_id {
+            return Err(AppError::NotFound("შეკვეთა ვერ მოიძებნა".to_string()));
+        }
+    }
 
     let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
 

@@ -8,7 +8,7 @@ use crate::{
 
 pub async fn create_order_with_items(
     pool: &PgPool,
-    user_id: i32,
+    user_id: Option<i32>,
     order_id: &str,
     amount: i32,
     req: &CheckoutRequest,
@@ -199,6 +199,17 @@ pub async fn get_user_order(pool: &PgPool, user_id: i32, order_id: &str) -> Resu
         "SELECT * FROM orders WHERE user_id = $1 AND order_id = $2 AND status != 'pending'",
     )
     .bind(user_id)
+    .bind(order_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(order)
+}
+
+pub async fn get_order_by_order_id(pool: &PgPool, order_id: &str) -> Result<Option<Order>> {
+    let order = sqlx::query_as::<_, Order>(
+        "SELECT * FROM orders WHERE order_id = $1 AND status != 'pending'",
+    )
     .bind(order_id)
     .fetch_optional(pool)
     .await?;
