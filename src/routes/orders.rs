@@ -169,10 +169,31 @@ pub async fn checkout(
 
     let delivery = if payload.delivery_type == "pickup" {
         Decimal::ZERO
-    } else if payload.delivery_time == "same_day" {
-        dec!(12)
     } else {
-        dec!(5.50)
+        let city = payload.city.as_deref().unwrap_or("");
+        let is_tbilisi = city == "თბილისი";
+        let is_high_mountain = matches!(
+            city,
+            "სვანეთი" | "რაჭა" | "ხევსურეთი" | "თუშეთი" | "ზემო აჭარა"
+        );
+
+        if payload.delivery_time == "same_day" && !is_tbilisi {
+            return Err(AppError::BadRequest(
+                "იმავე დღეს მიწოდება ხელმისაწვდომია მხოლოდ თბილისში".to_string(),
+            ));
+        }
+
+        if is_tbilisi {
+            if payload.delivery_time == "same_day" {
+                dec!(12)
+            } else {
+                dec!(5.50)
+            }
+        } else if is_high_mountain {
+            dec!(13.50)
+        } else {
+            dec!(8.50)
+        }
     };
 
     let amount_tetri = ((total_amount + delivery) * Decimal::from(100))
