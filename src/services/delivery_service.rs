@@ -2,7 +2,7 @@ use rust_decimal::{Decimal, dec};
 
 use crate::error::{AppError, Result};
 
-pub const FREE_SHIPPING_THRESHOLD: Decimal = dec!(50);
+pub const FREE_SHIPPING_THRESHOLD: Decimal = dec!(100);
 
 const TBILISI: &str = "თბილისი";
 const HIGH_MOUNTAIN_CITIES: &[&str] = &[
