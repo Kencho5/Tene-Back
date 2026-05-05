@@ -4,13 +4,13 @@ use crate::error::{AppError, Result};
 
 pub const FREE_SHIPPING_THRESHOLD: Decimal = dec!(100);
 
-const TBILISI: &str = "თბილისი";
+const TBILISI: &str = "tbilisi";
 const HIGH_MOUNTAIN_CITIES: &[&str] = &[
-    "სვანეთი",
-    "რაჭა",
-    "ხევსურეთი",
-    "თუშეთი",
-    "ზემო აჭარა",
+    "svaneti",
+    "racha",
+    "khevsureti",
+    "tusheti",
+    "zemo-acshara",
 ];
 
 const TBILISI_SAME_DAY: Decimal = dec!(12);
@@ -28,7 +28,8 @@ pub fn calculate_delivery(
         return Ok(Decimal::ZERO);
     }
 
-    let city = city.unwrap_or("");
+    let city = city.unwrap_or("").trim().to_lowercase();
+    let city = city.as_str();
     let is_tbilisi = city == TBILISI;
     let is_high_mountain = HIGH_MOUNTAIN_CITIES.contains(&city);
 
