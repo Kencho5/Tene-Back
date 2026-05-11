@@ -36,7 +36,7 @@ pub struct Order {
 pub struct OrderItem {
     pub id: i32,
     pub order_id: i32,
-    pub product_id: String,
+    pub product_id: Option<String>,
     pub color: Option<String>,
     pub quantity: i32,
     pub price_at_purchase: Decimal,

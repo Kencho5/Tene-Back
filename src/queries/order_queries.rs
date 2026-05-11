@@ -135,6 +135,9 @@ pub async fn update_order_status_and_deduct_stock(
         .await?;
 
         for item in &items {
+            let Some(product_id) = &item.product_id else {
+                continue;
+            };
             let result = match &item.color {
                 Some(color) => {
                     sqlx::query(
@@ -143,7 +146,7 @@ pub async fn update_order_status_and_deduct_stock(
                          WHERE product_id = $2 AND color = $3 AND quantity >= $1",
                     )
                     .bind(item.quantity)
-                    .bind(&item.product_id)
+                    .bind(product_id)
                     .bind(color)
                     .execute(&mut *tx)
                     .await?
@@ -155,7 +158,7 @@ pub async fn update_order_status_and_deduct_stock(
                          WHERE product_id = $2 AND is_primary = true AND quantity >= $1",
                     )
                     .bind(item.quantity)
-                    .bind(&item.product_id)
+                    .bind(product_id)
                     .execute(&mut *tx)
                     .await?
                 }
