@@ -17,9 +17,9 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
         r#"
         INSERT INTO products (
             id, name, description, price, discount, quantity,
-            specifications, brand_id, warranty, enabled
+            specifications, brand_id, cable_type_id, warranty, enabled
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
@@ -35,6 +35,7 @@ pub async fn create_product(pool: &PgPool, req: &ProductRequest) -> Result<Produ
             .unwrap_or(&serde_json::json!({})),
     )
     .bind(&req.brand_id)
+    .bind(&req.cable_type_id)
     .bind(&req.warranty)
     .bind(req.enabled.unwrap_or(true))
     .fetch_one(pool)
@@ -54,10 +55,11 @@ pub async fn update_product(pool: &PgPool, id: &str, req: &ProductRequest) -> Re
             discount = COALESCE($4, discount),
             specifications = COALESCE($5, specifications),
             brand_id = COALESCE($6, brand_id),
-            warranty = COALESCE($7, warranty),
-            enabled = COALESCE($8, enabled),
+            cable_type_id = COALESCE($7, cable_type_id),
+            warranty = COALESCE($8, warranty),
+            enabled = COALESCE($9, enabled),
             updated_at = NOW()
-        WHERE id = $9
+        WHERE id = $10
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
@@ -67,6 +69,7 @@ pub async fn update_product(pool: &PgPool, id: &str, req: &ProductRequest) -> Re
     .bind(&req.discount)
     .bind(&req.specifications)
     .bind(&req.brand_id)
+    .bind(&req.cable_type_id)
     .bind(&req.warranty)
     .bind(&req.enabled)
     .bind(id)

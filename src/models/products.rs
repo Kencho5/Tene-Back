@@ -16,6 +16,7 @@ pub struct Product {
     pub specifications: serde_json::Value,
     pub brand_id: Option<i32>,
     pub brand_name: Option<String>,
+    pub cable_type_id: Option<i32>,
     pub warranty: Option<String>,
     pub enabled: bool,
     pub created_at: DateTime<Utc>,

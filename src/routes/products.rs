@@ -7,7 +7,10 @@ use http::StatusCode;
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{Brand, ProductFacets, ProductQuery, ProductResponse, ProductSearchResponse},
+    models::{
+        Brand, CableType, CableVariant, CableTypeWithVariants, ProductFacets, ProductQuery,
+        ProductResponse, ProductSearchResponse,
+    },
     queries::{admin_queries, products_queries},
     utils::extractors::OptionalClaims,
 };
@@ -66,6 +69,44 @@ pub async fn get_related_products(
 pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>>> {
     let brands = admin_queries::get_brands(&state.db).await?;
     Ok(Json(brands))
+}
+
+pub async fn get_cable_types(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<CableType>>> {
+    let types = admin_queries::get_cable_types(&state.db).await?;
+    Ok(Json(types))
+}
+
+pub async fn get_cable_type_with_variants(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<Json<CableTypeWithVariants>> {
+    let cable_type = admin_queries::find_cable_type_by_id(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("cable type id-ით {} ვერ მოიძებნა", id)))?;
+    let variants = admin_queries::get_cable_variants_by_type(&state.db, id).await?;
+    Ok(Json(CableTypeWithVariants {
+        cable_type,
+        variants,
+    }))
+}
+
+pub async fn get_cable_variants(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<Json<Vec<CableVariant>>> {
+    if admin_queries::find_cable_type_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "cable type id-ით {} ვერ მოიძებნა",
+            id
+        )));
+    }
+    let variants = admin_queries::get_cable_variants_by_type(&state.db, id).await?;
+    Ok(Json(variants))
 }
 
 pub async fn add_product_views(

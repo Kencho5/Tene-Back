@@ -54,6 +54,15 @@ fn products_routes() -> Router<AppState> {
             get(products::get_related_products),
         )
         .route("/brands", get(products::get_brands))
+        .route("/cable-types", get(products::get_cable_types))
+        .route(
+            "/cable-types/{id}",
+            get(products::get_cable_type_with_variants),
+        )
+        .route(
+            "/cable-types/{id}/variants",
+            get(products::get_cable_variants),
+        )
 }
 
 fn categories_routes() -> Router<AppState> {

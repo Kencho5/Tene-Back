@@ -15,6 +15,7 @@ pub struct ProductRequest {
     pub quantity: Option<i32>,
     pub specifications: Option<serde_json::Value>,
     pub brand_id: Option<i32>,
+    pub cable_type_id: Option<i32>,
     pub warranty: Option<String>,
     pub enabled: Option<bool>,
 }
