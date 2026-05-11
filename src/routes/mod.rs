@@ -131,11 +131,28 @@ fn admin_routes() -> Router<AppState> {
         .route("/admin/brands", post(admin::create_brand))
         .route("/admin/brands/{id}", put(admin::update_brand))
         .route("/admin/brands/{id}", delete(admin::delete_brand))
-        //ADMIN CABLE SPECS
-        .route("/admin/cable-specs", get(admin::get_cable_specs))
-        .route("/admin/cable-specs", post(admin::create_cable_spec))
-        .route("/admin/cable-specs/{id}", put(admin::update_cable_spec))
-        .route("/admin/cable-specs/{id}", delete(admin::delete_cable_spec))
+        //ADMIN CABLE TYPES
+        .route("/admin/cable-types", get(admin::get_cable_types))
+        .route("/admin/cable-types", post(admin::create_cable_type))
+        .route("/admin/cable-types/{id}", put(admin::update_cable_type))
+        .route("/admin/cable-types/{id}", delete(admin::delete_cable_type))
+        //ADMIN CABLE VARIANTS
+        .route(
+            "/admin/cable-types/{type_id}/variants",
+            get(admin::get_cable_variants),
+        )
+        .route(
+            "/admin/cable-types/{type_id}/variants",
+            post(admin::create_cable_variant),
+        )
+        .route(
+            "/admin/cable-types/{type_id}/variants/{variant_id}",
+            put(admin::update_cable_variant),
+        )
+        .route(
+            "/admin/cable-types/{type_id}/variants/{variant_id}",
+            delete(admin::delete_cable_variant),
+        )
         //ADMIN ANALYTICS
         .route("/admin/analytics", get(admin::get_analytics))
         //ADMIN USERS

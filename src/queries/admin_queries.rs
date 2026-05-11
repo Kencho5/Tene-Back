@@ -3,8 +3,9 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableSpec, CableSpecRequest,
-        CableSpecUpdate, ConversionRate, HighViewsLowSales, MostViewedProduct, Order,
+        AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
+        CableVariant, CableVariantRequest, CableVariantUpdate, ConversionRate, HighViewsLowSales,
+        MostViewedProduct, Order,
         OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, TrendingProduct,
         UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
         ViewsByHour,
@@ -493,77 +494,144 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
     })
 }
 
-pub async fn get_cable_specs(pool: &PgPool) -> Result<Vec<CableSpec>> {
-    let specs = sqlx::query_as::<_, CableSpec>(
-        "SELECT * FROM cable_specs ORDER BY cable_type ASC, watts ASC, length_cm ASC",
-    )
-    .fetch_all(pool)
-    .await?;
-    Ok(specs)
+// CABLE TYPES
+pub async fn get_cable_types(pool: &PgPool) -> Result<Vec<CableType>> {
+    let types = sqlx::query_as::<_, CableType>("SELECT * FROM cable_types ORDER BY name ASC")
+        .fetch_all(pool)
+        .await?;
+    Ok(types)
 }
 
-pub async fn find_cable_spec_by_id(pool: &PgPool, id: i32) -> Result<Option<CableSpec>> {
-    let spec = sqlx::query_as::<_, CableSpec>("SELECT * FROM cable_specs WHERE id = $1")
+pub async fn find_cable_type_by_id(pool: &PgPool, id: i32) -> Result<Option<CableType>> {
+    let t = sqlx::query_as::<_, CableType>("SELECT * FROM cable_types WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
         .await?;
-    Ok(spec)
+    Ok(t)
 }
 
-pub async fn find_cable_spec_by_combo(
+pub async fn find_cable_type_by_name(pool: &PgPool, name: &str) -> Result<Option<CableType>> {
+    let t = sqlx::query_as::<_, CableType>("SELECT * FROM cable_types WHERE name = $1")
+        .bind(name)
+        .fetch_optional(pool)
+        .await?;
+    Ok(t)
+}
+
+pub async fn create_cable_type(pool: &PgPool, req: &CableTypeRequest) -> Result<CableType> {
+    let t = sqlx::query_as::<_, CableType>(
+        "INSERT INTO cable_types (name) VALUES ($1) RETURNING *",
+    )
+    .bind(&req.name)
+    .fetch_one(pool)
+    .await?;
+    Ok(t)
+}
+
+pub async fn update_cable_type(
     pool: &PgPool,
-    cable_type: &str,
+    id: i32,
+    req: &CableTypeRequest,
+) -> Result<CableType> {
+    let t = sqlx::query_as::<_, CableType>(
+        "UPDATE cable_types SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    )
+    .bind(&req.name)
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+    Ok(t)
+}
+
+pub async fn delete_cable_type(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM cable_types WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+// CABLE VARIANTS
+pub async fn get_cable_variants_by_type(
+    pool: &PgPool,
+    cable_type_id: i32,
+) -> Result<Vec<CableVariant>> {
+    let variants = sqlx::query_as::<_, CableVariant>(
+        "SELECT * FROM cable_variants WHERE cable_type_id = $1 ORDER BY watts ASC, length_cm ASC",
+    )
+    .bind(cable_type_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(variants)
+}
+
+pub async fn find_cable_variant_by_id(
+    pool: &PgPool,
+    id: i32,
+) -> Result<Option<CableVariant>> {
+    let v = sqlx::query_as::<_, CableVariant>("SELECT * FROM cable_variants WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(v)
+}
+
+pub async fn find_cable_variant_by_combo(
+    pool: &PgPool,
+    cable_type_id: i32,
     watts: i32,
     length_cm: i32,
-) -> Result<Option<CableSpec>> {
-    let spec = sqlx::query_as::<_, CableSpec>(
-        "SELECT * FROM cable_specs WHERE cable_type = $1 AND watts = $2 AND length_cm = $3",
+) -> Result<Option<CableVariant>> {
+    let v = sqlx::query_as::<_, CableVariant>(
+        "SELECT * FROM cable_variants WHERE cable_type_id = $1 AND watts = $2 AND length_cm = $3",
     )
-    .bind(cable_type)
+    .bind(cable_type_id)
     .bind(watts)
     .bind(length_cm)
     .fetch_optional(pool)
     .await?;
-    Ok(spec)
+    Ok(v)
 }
 
-pub async fn create_cable_spec(pool: &PgPool, req: &CableSpecRequest) -> Result<CableSpec> {
-    let spec = sqlx::query_as::<_, CableSpec>(
+pub async fn create_cable_variant(
+    pool: &PgPool,
+    cable_type_id: i32,
+    req: &CableVariantRequest,
+) -> Result<CableVariant> {
+    let v = sqlx::query_as::<_, CableVariant>(
         r#"
-        INSERT INTO cable_specs (cable_type, watts, length_cm, price, warranty_months)
+        INSERT INTO cable_variants (cable_type_id, watts, length_cm, price, warranty_months)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         "#,
     )
-    .bind(&req.cable_type)
+    .bind(cable_type_id)
     .bind(req.watts)
     .bind(req.length_cm)
     .bind(req.price)
     .bind(req.warranty_months)
     .fetch_one(pool)
     .await?;
-    Ok(spec)
+    Ok(v)
 }
 
-pub async fn update_cable_spec(
+pub async fn update_cable_variant(
     pool: &PgPool,
     id: i32,
-    req: &CableSpecUpdate,
-) -> Result<CableSpec> {
-    let spec = sqlx::query_as::<_, CableSpec>(
+    req: &CableVariantUpdate,
+) -> Result<CableVariant> {
+    let v = sqlx::query_as::<_, CableVariant>(
         r#"
-        UPDATE cable_specs
-        SET cable_type = COALESCE($1, cable_type),
-            watts = COALESCE($2, watts),
-            length_cm = COALESCE($3, length_cm),
-            price = COALESCE($4, price),
-            warranty_months = COALESCE($5, warranty_months),
+        UPDATE cable_variants
+        SET watts = COALESCE($1, watts),
+            length_cm = COALESCE($2, length_cm),
+            price = COALESCE($3, price),
+            warranty_months = COALESCE($4, warranty_months),
             updated_at = NOW()
-        WHERE id = $6
+        WHERE id = $5
         RETURNING *
         "#,
     )
-    .bind(&req.cable_type)
     .bind(req.watts)
     .bind(req.length_cm)
     .bind(req.price)
@@ -571,11 +639,11 @@ pub async fn update_cable_spec(
     .bind(id)
     .fetch_one(pool)
     .await?;
-    Ok(spec)
+    Ok(v)
 }
 
-pub async fn delete_cable_spec(pool: &PgPool, id: i32) -> Result<u64> {
-    let result = sqlx::query("DELETE FROM cable_specs WHERE id = $1")
+pub async fn delete_cable_variant(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM cable_variants WHERE id = $1")
         .bind(id)
         .execute(pool)
         .await?;

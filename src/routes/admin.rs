@@ -671,18 +671,125 @@ pub async fn delete_brand(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// CABLE SPEC ROUTES
-pub async fn get_cable_specs(State(state): State<AppState>) -> Result<Json<Vec<CableSpec>>> {
-    let specs = admin_queries::get_cable_specs(&state.db).await?;
-    Ok(Json(specs))
+// CABLE TYPE ROUTES
+pub async fn get_cable_types(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<CableTypeWithVariants>>> {
+    let types = admin_queries::get_cable_types(&state.db).await?;
+    let mut result = Vec::with_capacity(types.len());
+    for t in types {
+        let variants = admin_queries::get_cable_variants_by_type(&state.db, t.id).await?;
+        result.push(CableTypeWithVariants {
+            cable_type: t,
+            variants,
+        });
+    }
+    Ok(Json(result))
 }
 
-pub async fn create_cable_spec(
+pub async fn create_cable_type(
     State(state): State<AppState>,
-    Json(payload): Json<CableSpecRequest>,
-) -> Result<Json<CableSpec>> {
-    if payload.cable_type.trim().is_empty() {
-        return Err(AppError::BadRequest("cable_type აუცილებელია".to_string()));
+    Json(payload): Json<CableTypeRequest>,
+) -> Result<Json<CableType>> {
+    if payload.name.trim().is_empty() {
+        return Err(AppError::BadRequest("name აუცილებელია".to_string()));
+    }
+
+    if admin_queries::find_cable_type_by_name(&state.db, &payload.name)
+        .await?
+        .is_some()
+    {
+        return Err(AppError::Conflict(format!(
+            "cable type '{}' უკვე არსებობს",
+            payload.name
+        )));
+    }
+
+    let t = admin_queries::create_cable_type(&state.db, &payload).await?;
+    Ok(Json(t))
+}
+
+pub async fn update_cable_type(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<CableTypeRequest>,
+) -> Result<Json<CableType>> {
+    if payload.name.trim().is_empty() {
+        return Err(AppError::BadRequest("name აუცილებელია".to_string()));
+    }
+    if admin_queries::find_cable_type_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "cable type id-ით {} ვერ მოიძებნა",
+            id
+        )));
+    }
+
+    if let Some(existing) = admin_queries::find_cable_type_by_name(&state.db, &payload.name).await?
+    {
+        if existing.id != id {
+            return Err(AppError::Conflict(format!(
+                "cable type '{}' უკვე არსებობს",
+                payload.name
+            )));
+        }
+    }
+
+    let t = admin_queries::update_cable_type(&state.db, id, &payload).await?;
+    Ok(Json(t))
+}
+
+pub async fn delete_cable_type(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<StatusCode> {
+    if admin_queries::find_cable_type_by_id(&state.db, id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "cable type id-ით {} ვერ მოიძებნა",
+            id
+        )));
+    }
+
+    admin_queries::delete_cable_type(&state.db, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// CABLE VARIANT ROUTES
+pub async fn get_cable_variants(
+    State(state): State<AppState>,
+    Path(type_id): Path<i32>,
+) -> Result<Json<Vec<CableVariant>>> {
+    if admin_queries::find_cable_type_by_id(&state.db, type_id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "cable type id-ით {} ვერ მოიძებნა",
+            type_id
+        )));
+    }
+    let variants = admin_queries::get_cable_variants_by_type(&state.db, type_id).await?;
+    Ok(Json(variants))
+}
+
+pub async fn create_cable_variant(
+    State(state): State<AppState>,
+    Path(type_id): Path<i32>,
+    Json(payload): Json<CableVariantRequest>,
+) -> Result<Json<CableVariant>> {
+    if admin_queries::find_cable_type_by_id(&state.db, type_id)
+        .await?
+        .is_none()
+    {
+        return Err(AppError::NotFound(format!(
+            "cable type id-ით {} ვერ მოიძებნა",
+            type_id
+        )));
     }
     if payload.watts <= 0 || payload.length_cm <= 0 {
         return Err(AppError::BadRequest(
@@ -695,9 +802,9 @@ pub async fn create_cable_spec(
         ));
     }
 
-    if admin_queries::find_cable_spec_by_combo(
+    if admin_queries::find_cable_variant_by_combo(
         &state.db,
-        &payload.cable_type,
+        type_id,
         payload.watts,
         payload.length_cm,
     )
@@ -705,25 +812,32 @@ pub async fn create_cable_spec(
     .is_some()
     {
         return Err(AppError::Conflict(
-            "ასეთი cable spec უკვე არსებობს".to_string(),
+            "ასეთი ვარიაცია უკვე არსებობს".to_string(),
         ));
     }
 
-    let spec = admin_queries::create_cable_spec(&state.db, &payload).await?;
-    Ok(Json(spec))
+    let v = admin_queries::create_cable_variant(&state.db, type_id, &payload).await?;
+    Ok(Json(v))
 }
 
-pub async fn update_cable_spec(
+pub async fn update_cable_variant(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
-    Json(payload): Json<CableSpecUpdate>,
-) -> Result<Json<CableSpec>> {
-    let existing = admin_queries::find_cable_spec_by_id(&state.db, id)
+    Path((type_id, variant_id)): Path<(i32, i32)>,
+    Json(payload): Json<CableVariantUpdate>,
+) -> Result<Json<CableVariant>> {
+    let existing = admin_queries::find_cable_variant_by_id(&state.db, variant_id)
         .await?
-        .ok_or_else(|| AppError::NotFound(format!("cable spec id-ით {} ვერ მოიძებნა", id)))?;
+        .ok_or_else(|| {
+            AppError::NotFound(format!("ვარიაცია id-ით {} ვერ მოიძებნა", variant_id))
+        })?;
 
-    if payload.cable_type.is_none()
-        && payload.watts.is_none()
+    if existing.cable_type_id != type_id {
+        return Err(AppError::NotFound(
+            "ვარიაცია არ ეკუთვნის ამ cable type-ს".to_string(),
+        ));
+    }
+
+    if payload.watts.is_none()
         && payload.length_cm.is_none()
         && payload.price.is_none()
         && payload.warranty_months.is_none()
@@ -753,39 +867,40 @@ pub async fn update_cable_spec(
         }
     }
 
-    let new_type = payload.cable_type.as_deref().unwrap_or(&existing.cable_type);
     let new_watts = payload.watts.unwrap_or(existing.watts);
     let new_len = payload.length_cm.unwrap_or(existing.length_cm);
 
     if let Some(other) =
-        admin_queries::find_cable_spec_by_combo(&state.db, new_type, new_watts, new_len).await?
+        admin_queries::find_cable_variant_by_combo(&state.db, type_id, new_watts, new_len).await?
     {
-        if other.id != id {
+        if other.id != variant_id {
             return Err(AppError::Conflict(
-                "ასეთი cable spec უკვე არსებობს".to_string(),
+                "ასეთი ვარიაცია უკვე არსებობს".to_string(),
             ));
         }
     }
 
-    let spec = admin_queries::update_cable_spec(&state.db, id, &payload).await?;
-    Ok(Json(spec))
+    let v = admin_queries::update_cable_variant(&state.db, variant_id, &payload).await?;
+    Ok(Json(v))
 }
 
-pub async fn delete_cable_spec(
+pub async fn delete_cable_variant(
     State(state): State<AppState>,
-    Path(id): Path<i32>,
+    Path((type_id, variant_id)): Path<(i32, i32)>,
 ) -> Result<StatusCode> {
-    if admin_queries::find_cable_spec_by_id(&state.db, id)
+    let existing = admin_queries::find_cable_variant_by_id(&state.db, variant_id)
         .await?
-        .is_none()
-    {
-        return Err(AppError::NotFound(format!(
-            "cable spec id-ით {} ვერ მოიძებნა",
-            id
-        )));
+        .ok_or_else(|| {
+            AppError::NotFound(format!("ვარიაცია id-ით {} ვერ მოიძებნა", variant_id))
+        })?;
+
+    if existing.cable_type_id != type_id {
+        return Err(AppError::NotFound(
+            "ვარიაცია არ ეკუთვნის ამ cable type-ს".to_string(),
+        ));
     }
 
-    admin_queries::delete_cable_spec(&state.db, id).await?;
+    admin_queries::delete_cable_variant(&state.db, variant_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

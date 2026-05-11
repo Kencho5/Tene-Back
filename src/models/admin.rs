@@ -96,9 +96,22 @@ pub struct BrandRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct CableSpec {
+pub struct CableType {
     pub id: i32,
-    pub cable_type: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CableTypeRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CableVariant {
+    pub id: i32,
+    pub cable_type_id: i32,
     pub watts: i32,
     pub length_cm: i32,
     pub price: Decimal,
@@ -108,8 +121,7 @@ pub struct CableSpec {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CableSpecRequest {
-    pub cable_type: String,
+pub struct CableVariantRequest {
     pub watts: i32,
     pub length_cm: i32,
     pub price: Decimal,
@@ -117,12 +129,18 @@ pub struct CableSpecRequest {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CableSpecUpdate {
-    pub cable_type: Option<String>,
+pub struct CableVariantUpdate {
     pub watts: Option<i32>,
     pub length_cm: Option<i32>,
     pub price: Option<Decimal>,
     pub warranty_months: Option<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CableTypeWithVariants {
+    #[serde(flatten)]
+    pub cable_type: CableType,
+    pub variants: Vec<CableVariant>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
