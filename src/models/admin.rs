@@ -95,6 +95,36 @@ pub struct BrandRequest {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct CableSpec {
+    pub id: i32,
+    pub cable_type: String,
+    pub watts: i32,
+    pub length_cm: i32,
+    pub price: Decimal,
+    pub warranty_months: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CableSpecRequest {
+    pub cable_type: String,
+    pub watts: i32,
+    pub length_cm: i32,
+    pub price: Decimal,
+    pub warranty_months: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CableSpecUpdate {
+    pub cable_type: Option<String>,
+    pub watts: Option<i32>,
+    pub length_cm: Option<i32>,
+    pub price: Option<Decimal>,
+    pub warranty_months: Option<i32>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrderQuery {
     pub id: Option<i32>,

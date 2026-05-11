@@ -3,8 +3,8 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, ConversionRate,
-        HighViewsLowSales, MostViewedProduct, Order,
+        AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableSpec, CableSpecRequest,
+        CableSpecUpdate, ConversionRate, HighViewsLowSales, MostViewedProduct, Order,
         OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, TrendingProduct,
         UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
         ViewsByHour,
@@ -491,4 +491,93 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
         high_views_low_sales,
         conversion_rates,
     })
+}
+
+pub async fn get_cable_specs(pool: &PgPool) -> Result<Vec<CableSpec>> {
+    let specs = sqlx::query_as::<_, CableSpec>(
+        "SELECT * FROM cable_specs ORDER BY cable_type ASC, watts ASC, length_cm ASC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(specs)
+}
+
+pub async fn find_cable_spec_by_id(pool: &PgPool, id: i32) -> Result<Option<CableSpec>> {
+    let spec = sqlx::query_as::<_, CableSpec>("SELECT * FROM cable_specs WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(spec)
+}
+
+pub async fn find_cable_spec_by_combo(
+    pool: &PgPool,
+    cable_type: &str,
+    watts: i32,
+    length_cm: i32,
+) -> Result<Option<CableSpec>> {
+    let spec = sqlx::query_as::<_, CableSpec>(
+        "SELECT * FROM cable_specs WHERE cable_type = $1 AND watts = $2 AND length_cm = $3",
+    )
+    .bind(cable_type)
+    .bind(watts)
+    .bind(length_cm)
+    .fetch_optional(pool)
+    .await?;
+    Ok(spec)
+}
+
+pub async fn create_cable_spec(pool: &PgPool, req: &CableSpecRequest) -> Result<CableSpec> {
+    let spec = sqlx::query_as::<_, CableSpec>(
+        r#"
+        INSERT INTO cable_specs (cable_type, watts, length_cm, price, warranty_months)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+        "#,
+    )
+    .bind(&req.cable_type)
+    .bind(req.watts)
+    .bind(req.length_cm)
+    .bind(req.price)
+    .bind(req.warranty_months)
+    .fetch_one(pool)
+    .await?;
+    Ok(spec)
+}
+
+pub async fn update_cable_spec(
+    pool: &PgPool,
+    id: i32,
+    req: &CableSpecUpdate,
+) -> Result<CableSpec> {
+    let spec = sqlx::query_as::<_, CableSpec>(
+        r#"
+        UPDATE cable_specs
+        SET cable_type = COALESCE($1, cable_type),
+            watts = COALESCE($2, watts),
+            length_cm = COALESCE($3, length_cm),
+            price = COALESCE($4, price),
+            warranty_months = COALESCE($5, warranty_months),
+            updated_at = NOW()
+        WHERE id = $6
+        RETURNING *
+        "#,
+    )
+    .bind(&req.cable_type)
+    .bind(req.watts)
+    .bind(req.length_cm)
+    .bind(req.price)
+    .bind(req.warranty_months)
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+    Ok(spec)
+}
+
+pub async fn delete_cable_spec(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM cable_specs WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
 }

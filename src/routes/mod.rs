@@ -131,6 +131,11 @@ fn admin_routes() -> Router<AppState> {
         .route("/admin/brands", post(admin::create_brand))
         .route("/admin/brands/{id}", put(admin::update_brand))
         .route("/admin/brands/{id}", delete(admin::delete_brand))
+        //ADMIN CABLE SPECS
+        .route("/admin/cable-specs", get(admin::get_cable_specs))
+        .route("/admin/cable-specs", post(admin::create_cable_spec))
+        .route("/admin/cable-specs/{id}", put(admin::update_cable_spec))
+        .route("/admin/cable-specs/{id}", delete(admin::delete_cable_spec))
         //ADMIN ANALYTICS
         .route("/admin/analytics", get(admin::get_analytics))
         //ADMIN USERS
