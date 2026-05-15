@@ -7,6 +7,7 @@ mod orders;
 mod products;
 mod register;
 mod send_code;
+mod tasks;
 mod user_addresses;
 
 use axum::{
@@ -161,6 +162,21 @@ fn admin_routes() -> Router<AppState> {
         .route(
             "/admin/cable-types/{type_id}/variants/{variant_id}",
             delete(admin::delete_cable_variant),
+        )
+        //ADMIN TASKS
+        .route("/admin/tasks", get(tasks::search_tasks))
+        .route("/admin/tasks", post(tasks::create_task))
+        .route("/admin/tasks/{id}", get(tasks::get_task))
+        .route("/admin/tasks/{id}", put(tasks::update_task))
+        .route("/admin/tasks/{id}", delete(tasks::delete_task))
+        .route("/admin/tasks/{id}/state", patch(tasks::update_task_state))
+        .route(
+            "/admin/tasks/{id}/media",
+            put(tasks::generate_task_media_urls),
+        )
+        .route(
+            "/admin/tasks/{id}/media/{media_uuid}",
+            delete(tasks::delete_task_media),
         )
         //ADMIN ANALYTICS
         .route("/admin/analytics", get(admin::get_analytics))

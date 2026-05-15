@@ -3,4 +3,5 @@ pub mod category_queries;
 pub mod email_queries;
 pub mod order_queries;
 pub mod products_queries;
+pub mod task_queries;
 pub mod user_queries;
