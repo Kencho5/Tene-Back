@@ -6,6 +6,8 @@ use axum::{
 use http::StatusCode;
 use uuid::Uuid;
 
+use rust_decimal::Decimal;
+
 use crate::{
     AppState,
     error::{AppError, Result},
@@ -14,10 +16,49 @@ use crate::{
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
 };
 
+fn resolve_discount(
+    price: Option<Decimal>,
+    discount: Option<Decimal>,
+    discounted_price: Option<Decimal>,
+) -> Result<Option<Decimal>> {
+    if discount.is_some() && discounted_price.is_some() {
+        return Err(AppError::BadRequest(
+            "discount და discounted_price ერთდროულად ვერ მიეთითება".to_string(),
+        ));
+    }
+
+    if let Some(d) = discount {
+        if d < Decimal::ZERO || d > Decimal::from(100) {
+            return Err(AppError::BadRequest(
+                "discount უნდა იყოს 0-დან 100-მდე".to_string(),
+            ));
+        }
+        return Ok(Some(d));
+    }
+
+    if let Some(dp) = discounted_price {
+        let p = price.ok_or_else(|| {
+            AppError::BadRequest("discounted_price-ისთვის price აუცილებელია".to_string())
+        })?;
+        if p <= Decimal::ZERO {
+            return Err(AppError::BadRequest("price უნდა იყოს დადებითი".to_string()));
+        }
+        if dp < Decimal::ZERO || dp > p {
+            return Err(AppError::BadRequest(
+                "discounted_price უნდა იყოს 0-დან price-მდე".to_string(),
+            ));
+        }
+        let pct = (p - dp) * Decimal::from(100) / p;
+        return Ok(Some(pct));
+    }
+
+    Ok(None)
+}
+
 //PRODUCT ROUTES
 pub async fn create_product(
     State(state): State<AppState>,
-    Json(payload): Json<ProductRequest>,
+    Json(mut payload): Json<ProductRequest>,
 ) -> Result<Json<ProductResponse>> {
     let id = payload
         .id
@@ -39,6 +80,8 @@ pub async fn create_product(
         )));
     }
 
+    payload.discount = resolve_discount(payload.price, payload.discount, payload.discounted_price)?;
+
     let product = admin_queries::create_product(&state.db, &payload).await?;
     let images = products_queries::find_images_by_product_id(&state.db, &product.id).await?;
     let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
@@ -53,14 +96,14 @@ pub async fn create_product(
 pub async fn update_product(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(payload): Json<ProductRequest>,
+    Json(mut payload): Json<ProductRequest>,
 ) -> Result<Json<ProductResponse>> {
-    if products_queries::find_by_id(&state.db, &id).await?.is_none() {
-        return Err(AppError::NotFound(format!(
-            "პროდუქტი id-ით {} ვერ მოიძებნა",
-            id
-        )));
-    }
+    let existing = products_queries::find_by_id(&state.db, &id).await?.ok_or_else(|| {
+        AppError::NotFound(format!("პროდუქტი id-ით {} ვერ მოიძებნა", id))
+    })?;
+
+    let effective_price = payload.price.or(Some(existing.price));
+    payload.discount = resolve_discount(effective_price, payload.discount, payload.discounted_price)?;
 
     let product = admin_queries::update_product(&state.db, &id, &payload).await?;
     let images = products_queries::find_images_by_product_id(&state.db, &product.id).await?;
