@@ -141,7 +141,7 @@ pub async fn search_products(
         qb.push(")) as relevance_score");
     }
     if needs_views {
-        qb.push(", (SELECT COUNT(*) FROM product_views pv WHERE pv.product_id = p.id) as view_count");
+        qb.push(", (SELECT COUNT(*) FROM product_views pv WHERE pv.product_id = p.id AND pv.viewed_at >= NOW() - INTERVAL '7 days') as view_count");
     }
     qb.push(", COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE 1=1");
 
