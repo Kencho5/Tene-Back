@@ -50,6 +50,7 @@ fn products_routes() -> Router<AppState> {
         .route("/products/facets", get(products::get_product_facets))
         .route("/products/{id}", get(products::get_product))
         .route("/products/{id}/views", post(products::add_product_views))
+        .route("/top-products", get(products::get_top_products))
         .route(
             "/products/{id}/related",
             get(products::get_related_products),
@@ -180,6 +181,9 @@ fn admin_routes() -> Router<AppState> {
         )
         //ADMIN ANALYTICS
         .route("/admin/analytics", get(admin::get_analytics))
+        //ADMIN TOP PRODUCTS
+        .route("/admin/top-products", get(admin::get_top_products_admin))
+        .route("/admin/top-products", put(admin::replace_top_products))
         //ADMIN USERS
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))

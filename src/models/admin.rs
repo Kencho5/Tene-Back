@@ -232,3 +232,13 @@ pub struct AnalyticsResponse {
     pub high_views_low_sales: Vec<HighViewsLowSales>,
     pub conversion_rates: Vec<ConversionRate>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct TopProductsRequest {
+    pub product_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TopProductsQuery {
+    pub limit: Option<i64>,
+}

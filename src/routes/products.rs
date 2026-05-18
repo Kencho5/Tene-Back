@@ -9,7 +9,7 @@ use crate::{
     error::{AppError, Result},
     models::{
         Brand, CableType, CableVariant, CableTypeWithVariants, ProductFacets, ProductQuery,
-        ProductResponse, ProductSearchResponse,
+        ProductResponse, ProductSearchResponse, TopProductsQuery,
     },
     queries::{admin_queries, products_queries},
     utils::extractors::OptionalClaims,
@@ -118,4 +118,13 @@ pub async fn add_product_views(
     products_queries::add_product_views(&state.db, &id, user_id).await?;
 
     Ok(StatusCode::CREATED)
+}
+
+pub async fn get_top_products(
+    State(state): State<AppState>,
+    Query(params): Query<TopProductsQuery>,
+) -> Result<Json<Vec<ProductResponse>>> {
+    let ids = admin_queries::get_top_product_ids(&state.db, params.limit).await?;
+    let response = products_queries::build_products_response_ordered(&state.db, &ids).await?;
+    Ok(Json(response))
 }

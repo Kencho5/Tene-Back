@@ -652,3 +652,38 @@ pub async fn delete_cable_variant(pool: &PgPool, id: i32) -> Result<u64> {
         .await?;
     Ok(result.rows_affected())
 }
+
+pub async fn replace_top_products(pool: &PgPool, product_ids: &[String]) -> Result<()> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query("DELETE FROM top_products")
+        .execute(&mut *tx)
+        .await?;
+
+    if !product_ids.is_empty() {
+        let positions: Vec<i32> = (0..product_ids.len() as i32).collect();
+        sqlx::query(
+            "INSERT INTO top_products (product_id, position)
+             SELECT * FROM UNNEST($1::text[], $2::int[])",
+        )
+        .bind(product_ids)
+        .bind(&positions)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn get_top_product_ids(pool: &PgPool, limit: Option<i64>) -> Result<Vec<String>> {
+    let mut q = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT product_id FROM top_products ORDER BY position ASC",
+    );
+    if let Some(l) = limit {
+        q.push(" LIMIT ");
+        q.push_bind(l);
+    }
+    let rows: Vec<(String,)> = q.build_query_as().fetch_all(pool).await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}

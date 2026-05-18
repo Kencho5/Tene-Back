@@ -69,6 +69,31 @@ pub async fn find_images_by_product_ids(
     Ok(groups)
 }
 
+pub async fn build_products_response_ordered(
+    pool: &PgPool,
+    ordered_ids: &[String],
+) -> Result<Vec<ProductResponse>> {
+    if ordered_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let products_map = find_by_ids(pool, ordered_ids).await?;
+    let mut image_groups = find_images_by_product_ids(pool, ordered_ids).await?;
+
+    let mut out = Vec::with_capacity(ordered_ids.len());
+    for id in ordered_ids {
+        if let Some(product) = products_map.get(id).cloned() {
+            let images = image_groups.remove(id).unwrap_or_default();
+            out.push(ProductResponse {
+                data: product,
+                images,
+                categories: Vec::new(),
+            });
+        }
+    }
+    Ok(out)
+}
+
 fn escape_like(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('%', "\\%")

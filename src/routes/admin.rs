@@ -919,3 +919,44 @@ pub async fn get_analytics(
     let analytics = admin_queries::get_analytics(&state.db, params).await?;
     Ok(Json(analytics))
 }
+
+// TOP PRODUCTS ROUTES
+pub async fn get_top_products_admin(
+    State(state): State<AppState>,
+    Query(params): Query<TopProductsQuery>,
+) -> Result<Json<Vec<ProductResponse>>> {
+    let ids = admin_queries::get_top_product_ids(&state.db, params.limit).await?;
+    let response = products_queries::build_products_response_ordered(&state.db, &ids).await?;
+    Ok(Json(response))
+}
+
+pub async fn replace_top_products(
+    State(state): State<AppState>,
+    Json(payload): Json<TopProductsRequest>,
+) -> Result<StatusCode> {
+    let mut seen = std::collections::HashSet::new();
+    for id in &payload.product_ids {
+        if !seen.insert(id) {
+            return Err(AppError::BadRequest(format!(
+                "დუბლირებული პროდუქტი id-ით {}",
+                id
+            )));
+        }
+    }
+
+    if !payload.product_ids.is_empty() {
+        let found = products_queries::find_by_ids(&state.db, &payload.product_ids).await?;
+        for id in &payload.product_ids {
+            if !found.contains_key(id) {
+                return Err(AppError::NotFound(format!(
+                    "პროდუქტი id-ით {} ვერ მოიძებნა",
+                    id
+                )));
+            }
+        }
+    }
+
+    admin_queries::replace_top_products(&state.db, &payload.product_ids).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
