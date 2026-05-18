@@ -13,38 +13,12 @@ use uuid::Uuid;
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{CartItem, CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
+    models::{CableVariant, CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
     queries::{order_queries, products_queries},
     services::{delivery_service, flitt_service},
     utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
-
-const CABLE_PRICES: &[(i32, i32, i32)] = &[
-    // (length_cm, price_67w, price_120w)
-    (20, 15, 25),
-    (50, 20, 35),
-    (70, 22, 40),
-    (100, 25, 50),
-    (130, 30, 55),
-    (150, 35, 60),
-    (200, 37, 65),
-    (250, 40, 70),
-    (300, 45, 75),
-    (350, 50, 80),
-    (400, 55, 85),
-    (450, 60, 90),
-    (500, 65, 95),
-];
-
-fn cable_price(watts: i32, length_cm: i32) -> Option<i32> {
-    let row = CABLE_PRICES.iter().find(|(l, _, _)| *l == length_cm)?;
-    match watts {
-        67 => Some(row.1),
-        120 => Some(row.2),
-        _ => None,
-    }
-}
 
 pub async fn checkout(
     State(state): State<AppState>,
@@ -134,14 +108,6 @@ fn validate_checkout_request(payload: &CheckoutRequest) -> Result<()> {
                 item.product_id
             )));
         }
-        if let Some(cfg) = &item.cable_config {
-            if cable_price(cfg.watts, cfg.length_cm).is_none() {
-                return Err(AppError::BadRequest(format!(
-                    "არასწორი კაბელის კონფიგურაცია პროდუქტისთვის {}",
-                    item.product_id
-                )));
-            }
-        }
     }
 
     Ok(())
@@ -162,6 +128,13 @@ async fn build_order_items(
     let all_products = products_queries::find_by_ids(&state.db, &requested_ids).await?;
     let all_images =
         products_queries::find_images_by_product_ids(&state.db, &requested_ids).await?;
+
+    let cable_type_ids: Vec<i32> = all_products
+        .values()
+        .filter_map(|p| p.cable_type_id)
+        .collect();
+    let cable_variants =
+        products_queries::find_cable_variants_by_type_ids(&state.db, &cable_type_ids).await?;
 
     let mut subtotal = Decimal::ZERO;
     let mut order_items = Vec::with_capacity(payload.items.len());
@@ -225,7 +198,28 @@ async fn build_order_items(
             )));
         }
 
-        let price = item_price(product.price, product.discount, item);
+        let variant = match &item.cable_config {
+            Some(cfg) => {
+                let cable_type_id = product.cable_type_id.ok_or_else(|| {
+                    AppError::BadRequest(format!(
+                        "პროდუქტი {} არ არის კაბელი",
+                        item.product_id
+                    ))
+                })?;
+                let v = cable_variants
+                    .get(&(cable_type_id, cfg.watts, cfg.length_cm))
+                    .ok_or_else(|| {
+                        AppError::BadRequest(format!(
+                            "არასწორი კაბელის კონფიგურაცია პროდუქტისთვის {}",
+                            item.product_id
+                        ))
+                    })?;
+                Some(v)
+            }
+            None => None,
+        };
+
+        let price = item_price(product.price, product.discount, variant);
         subtotal += price * Decimal::from(item.quantity);
 
         let cable_config_json = item
@@ -247,12 +241,9 @@ async fn build_order_items(
     Ok((order_items, subtotal))
 }
 
-fn item_price(base_price: Decimal, discount: Decimal, item: &CartItem) -> Decimal {
-    if let Some(cfg) = &item.cable_config {
-        // Validated upstream — safe to expect
-        return Decimal::from(
-            cable_price(cfg.watts, cfg.length_cm).expect("cable_price validated"),
-        );
+fn item_price(base_price: Decimal, discount: Decimal, variant: Option<&CableVariant>) -> Decimal {
+    if let Some(v) = variant {
+        return v.price;
     }
     if discount > Decimal::ZERO {
         return base_price * (Decimal::ONE - discount / Decimal::from(100));

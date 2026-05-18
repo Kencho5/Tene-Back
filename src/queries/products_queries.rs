@@ -5,10 +5,30 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        BrandFacetValue, Category, CategoryFacetValue, FacetValue, Product, ProductFacets,
-        ProductImage, ProductQuery, ProductResponse, SaleType, SortBy,
+        BrandFacetValue, CableVariant, Category, CategoryFacetValue, FacetValue, Product,
+        ProductFacets, ProductImage, ProductQuery, ProductResponse, SaleType, SortBy,
     },
 };
+
+pub async fn find_cable_variants_by_type_ids(
+    pool: &PgPool,
+    type_ids: &[i32],
+) -> Result<HashMap<(i32, i32, i32), CableVariant>> {
+    if type_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let variants = sqlx::query_as::<_, CableVariant>(
+        "SELECT * FROM cable_variants WHERE cable_type_id = ANY($1)",
+    )
+    .bind(type_ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(variants
+        .into_iter()
+        .map(|v| ((v.cable_type_id, v.watts, v.length_cm), v))
+        .collect())
+}
 
 pub async fn find_by_id(pool: &PgPool, id: &str) -> Result<Option<Product>> {
     let product = sqlx::query_as::<_, Product>(
