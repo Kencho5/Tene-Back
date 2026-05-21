@@ -15,7 +15,7 @@ use crate::{
     error::{AppError, Result},
     models::{CableVariant, CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
     queries::{order_queries, products_queries},
-    services::{delivery_service, flitt_service},
+    services::{delivery_service, email_service, flitt_service},
     utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
@@ -293,9 +293,32 @@ pub async fn flitt_callback(
     )
     .await
     {
-        Ok(Some((_order, stock_ok))) => {
+        Ok(Some((order, stock_ok))) => {
             if !stock_ok {
                 tracing::warn!("Insufficient stock for approved order {}", order_id);
+            } else if order_status == "approved" {
+                match order_queries::get_items_for_orders(&state.db, &[order.id]).await {
+                    Ok(items) => {
+                        if let Err(e) = email_service::send_order_confirmation_email(
+                            &state.ses_client,
+                            &order,
+                            &items,
+                        )
+                        .await
+                        {
+                            tracing::error!(
+                                "Failed to send order confirmation for {}: {:?}",
+                                order_id,
+                                e
+                            );
+                        }
+                    }
+                    Err(e) => tracing::error!(
+                        "Failed to load items for confirmation email {}: {:?}",
+                        order_id,
+                        e
+                    ),
+                }
             }
             StatusCode::OK
         }

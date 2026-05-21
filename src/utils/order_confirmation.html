@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="supported-color-schemes" content="light" />
+    <title>შეკვეთის დადასტურება</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #f6f6f6;
+        font-family:
+          "Noto Sans Georgian",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        color: #212121;
+      }
+      img {
+        border: 0;
+        outline: none;
+        text-decoration: none;
+        -ms-interpolation-mode: bicubic;
+      }
+      a {
+        color: #1aa44a;
+      }
+      .wrapper {
+        width: 100%;
+        background: #f6f6f6;
+      }
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow:
+          0px 1px 8px rgba(20, 20, 20, 0.08),
+          0px 0px 1px rgba(20, 20, 20, 0.12);
+      }
+      .header {
+        background: linear-gradient(90deg, #0bb705 0%, #0ad810 100%);
+        padding: 28px 32px;
+        text-align: center;
+      }
+      .logo {
+        display: inline-block;
+        font-size: 24px;
+        font-weight: 700;
+        color: #ffffff !important;
+        letter-spacing: -0.5px;
+        text-decoration: none;
+      }
+      .hero {
+        padding: 32px 40px 8px;
+        text-align: center;
+      }
+      .badge {
+        display: inline-block;
+        background: #f4faf5;
+        color: #1aa44a;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid #def1e0;
+        margin-bottom: 14px;
+        text-transform: uppercase;
+      }
+      .title {
+        font-size: 24px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        letter-spacing: -0.4px;
+      }
+      .intro {
+        font-size: 14px;
+        color: #6d6d6d;
+        line-height: 1.6;
+        max-width: 440px;
+        margin: 0 auto;
+      }
+      .meta-block {
+        text-align: center;
+        margin: 22px 0 4px;
+      }
+      .order-id {
+        display: inline-block;
+        background: #f4faf5;
+        border: 1px solid #def1e0;
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1aa44a;
+        font-family: "SF Mono", "Courier New", monospace;
+      }
+      .order-date {
+        display: block;
+        margin-top: 8px;
+        font-size: 12px;
+        color: #888;
+      }
+      .body {
+        padding: 8px 40px 32px;
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin: 28px 0 12px;
+      }
+      .items-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .items-table td {
+        padding: 14px 0;
+        border-bottom: 1px solid #eee;
+        font-size: 14px;
+        vertical-align: top;
+      }
+      .items-table tr:last-child td {
+        border-bottom: none;
+      }
+      .item-name {
+        font-weight: 600;
+        color: #212121;
+        line-height: 1.4;
+      }
+      .item-meta {
+        font-size: 12px;
+        color: #888;
+        margin-top: 4px;
+        line-height: 1.5;
+      }
+      .item-price {
+        text-align: right;
+        font-weight: 600;
+        white-space: nowrap;
+        padding-left: 12px;
+        color: #212121;
+      }
+      .item-unit {
+        font-size: 12px;
+        color: #888;
+        font-weight: 400;
+        margin-top: 4px;
+      }
+      .totals-box {
+        margin-top: 4px;
+        background: #fafafa;
+        border-radius: 12px;
+        padding: 14px 18px;
+      }
+      .totals {
+        width: 100%;
+      }
+      .totals td {
+        padding: 6px 0;
+        font-size: 14px;
+        color: #6d6d6d;
+      }
+      .totals .value {
+        text-align: right;
+        color: #212121;
+        font-weight: 600;
+      }
+      .totals .grand td {
+        border-top: 1px solid #e7e7e7;
+        padding-top: 12px;
+        font-size: 17px;
+        font-weight: 700;
+        color: #212121;
+      }
+      .totals .grand .value {
+        color: #1aa44a;
+      }
+      .info-grid {
+        background: #fafafa;
+        border-radius: 12px;
+        padding: 16px 18px;
+      }
+      .info-row {
+        font-size: 13px;
+        line-height: 1.6;
+        color: #6d6d6d;
+      }
+      .info-row + .info-row {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #efefef;
+      }
+      .info-row strong {
+        color: #212121;
+        font-weight: 600;
+        display: inline-block;
+        min-width: 120px;
+      }
+      .comment {
+        margin-top: 14px;
+        background: #fff8e6;
+        border: 1px solid #ffe9a8;
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 13px;
+        color: #6d6d6d;
+        line-height: 1.6;
+      }
+      .comment strong {
+        color: #212121;
+        font-weight: 600;
+        display: block;
+        margin-bottom: 4px;
+      }
+      .help {
+        margin: 24px 0 0;
+        background: #f4faf5;
+        border: 1px solid #def1e0;
+        border-radius: 12px;
+        padding: 16px 18px;
+        text-align: center;
+        font-size: 13px;
+        color: #6d6d6d;
+        line-height: 1.6;
+      }
+      .help a {
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .footer {
+        padding: 20px 32px 28px;
+        text-align: center;
+        font-size: 12px;
+        color: #888;
+        line-height: 1.7;
+      }
+      .footer a {
+        color: #1aa44a;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      @media (max-width: 600px) {
+        .container {
+          border-radius: 16px;
+        }
+        .header {
+          padding: 24px 22px;
+        }
+        .hero {
+          padding: 26px 22px 6px;
+        }
+        .title {
+          font-size: 20px;
+        }
+        .body {
+          padding: 6px 22px 24px;
+        }
+        .info-row strong {
+          display: block;
+          min-width: 0;
+          margin-bottom: 2px;
+        }
+        .section-label {
+          margin: 22px 0 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- preheader: hidden preview text -->
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        mso-hide: all;
+        font-size: 1px;
+        line-height: 1px;
+        color: #f6f6f6;
+      "
+    >
+      თქვენი შეკვეთა მიღებულია — {{order_id}}
+    </div>
+
+    <table
+      class="wrapper"
+      role="presentation"
+      cellpadding="0"
+      cellspacing="0"
+      width="100%"
+    >
+      <tr>
+        <td align="center" style="padding: 40px 16px">
+          <table
+            class="container"
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+          >
+            <tr>
+              <td class="header">
+                <a
+                  href="https://tene.ge"
+                  class="logo"
+                  style="color: #ffffff; text-decoration: none"
+                  >Tene</a
+                >
+              </td>
+            </tr>
+
+            <tr>
+              <td class="hero">
+                <span class="badge">✓ შეკვეთა მიღებულია</span>
+                <div class="title">გმადლობთ შეკვეთისთვის!</div>
+                <p class="intro">
+                  თქვენი გადახდა წარმატებით დადასტურდა. ქვემოთ იხილავთ შეკვეთის
+                  სრულ დეტალებს.
+                </p>
+                <div class="meta-block">
+                  <span class="order-id">{{order_id}}</span>
+                  <span class="order-date">{{created_at}}</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="body">
+                <div class="section-label">პროდუქტები</div>
+                <table
+                  class="items-table"
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  width="100%"
+                >
+                  {{items_rows}}
+                </table>
+
+                <div class="section-label">გადახდის შეჯამება</div>
+                <div class="totals-box">
+                  <table
+                    class="totals"
+                    role="presentation"
+                    cellpadding="0"
+                    cellspacing="0"
+                    width="100%"
+                  >
+                    <tr>
+                      <td>ჯამი</td>
+                      <td class="value">{{subtotal}} ₾</td>
+                    </tr>
+                    <tr>
+                      <td>მიწოდება</td>
+                      <td class="value">{{delivery_price}}</td>
+                    </tr>
+                    <tr class="grand">
+                      <td>სულ</td>
+                      <td class="value">{{total}} ₾</td>
+                    </tr>
+                  </table>
+                </div>
+
+                <div class="section-label">მიმღები</div>
+                <div class="info-grid">
+                  <div class="info-row">
+                    <strong>სახელი</strong> {{customer}}
+                  </div>
+                  <div class="info-row"><strong>ელფოსტა</strong> {{email}}</div>
+                  <div class="info-row">
+                    <strong>ტელეფონი</strong> {{phone}}
+                  </div>
+                  {{organization_block}}
+                </div>
+
+                <div class="section-label">მიწოდება</div>
+                <div class="info-grid">
+                  <div class="info-row">
+                    <strong>ტიპი</strong> {{delivery_type}}
+                  </div>
+                  <div class="info-row">
+                    <strong>დრო</strong> {{delivery_time}}
+                  </div>
+                  {{address_block}}
+                </div>
+
+                {{comment_block}}
+
+                <div class="section-label">გადახდა</div>
+                <div class="info-grid">
+                  <div class="info-row">
+                    <strong>ვალუტა</strong> {{currency}}
+                  </div>
+                  <div class="info-row">
+                    <strong>გადახდის ID</strong> {{payment_id}}
+                  </div>
+                </div>
+
+                <div class="help">
+                  გჭირდებათ დახმარება? მოგვწერეთ
+                  <a href="mailto:support@tene.ge">support@tene.ge</a>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="footer">
+                © Tene · <a href="https://tene.ge">tene.ge</a><br />
+                ეს არის ავტომატური წერილი — გთხოვთ, არ უპასუხოთ.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
