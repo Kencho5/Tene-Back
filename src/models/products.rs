@@ -33,11 +33,46 @@ pub struct ProductImage {
     pub quantity: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Faq {
+    pub question: String,
+    pub answer: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ProductSeo {
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+    pub meta_keywords: Vec<String>,
+    pub slug: Option<String>,
+    pub search_terms: Vec<String>,
+    pub faqs: serde_json::Value,
+    pub og_image_uuid: Option<Uuid>,
+    pub no_index: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProductSeoRequest {
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+    #[serde(default)]
+    pub meta_keywords: Vec<String>,
+    pub slug: Option<String>,
+    #[serde(default)]
+    pub search_terms: Vec<String>,
+    #[serde(default)]
+    pub faqs: Vec<Faq>,
+    pub og_image_uuid: Option<Uuid>,
+    #[serde(default)]
+    pub no_index: bool,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProductResponse {
     pub data: Product,
     pub images: Vec<ProductImage>,
     pub categories: Vec<Category>,
+    pub seo: Option<ProductSeo>,
 }
 
 #[derive(Debug, Serialize)]

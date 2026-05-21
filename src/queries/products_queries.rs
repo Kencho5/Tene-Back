@@ -108,6 +108,7 @@ pub async fn build_products_response_ordered(
                 data: product,
                 images,
                 categories: Vec::new(),
+                seo: None,
             });
         }
     }
@@ -148,15 +149,17 @@ pub async fn search_products(
 
         return match product {
             Some(product) => {
-                let (images, categories) = tokio::try_join!(
+                let (images, categories, seo) = tokio::try_join!(
                     find_images_by_product_id(pool, id),
                     crate::queries::category_queries::get_product_categories(pool, id),
+                    crate::queries::admin_queries::get_product_seo(pool, id),
                 )?;
                 Ok(crate::models::ProductSearchResponse {
                     products: vec![ProductResponse {
                         data: product,
                         images,
                         categories,
+                        seo,
                     }],
                     total: 1,
                     limit,
@@ -386,6 +389,7 @@ pub async fn search_products(
                 .remove(&result.product.id)
                 .unwrap_or_default(),
             data: result.product,
+            seo: None,
         })
         .collect();
 
@@ -440,6 +444,7 @@ pub async fn get_related_products(
                 data: product,
                 images,
                 categories: Vec::new(),
+                seo: None,
             }
         })
         .collect();

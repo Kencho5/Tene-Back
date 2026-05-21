@@ -6,7 +6,8 @@ use crate::{
         AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
         CableVariant, CableVariantRequest, CableVariantUpdate, ConversionRate, HighViewsLowSales,
         MostViewedProduct, Order,
-        OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, TrendingProduct,
+        OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, ProductSeo,
+        ProductSeoRequest, TrendingProduct,
         UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
         ViewsByHour,
     },
@@ -674,6 +675,71 @@ pub async fn replace_top_products(pool: &PgPool, product_ids: &[String]) -> Resu
 
     tx.commit().await?;
     Ok(())
+}
+
+pub async fn get_product_seo(pool: &PgPool, product_id: &str) -> Result<Option<ProductSeo>> {
+    let seo = sqlx::query_as::<_, ProductSeo>(
+        "SELECT meta_title, meta_description, meta_keywords, slug, search_terms, faqs,
+                og_image_uuid, no_index
+         FROM product_seo WHERE product_id = $1",
+    )
+    .bind(product_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(seo)
+}
+
+pub async fn find_product_seo_by_slug(
+    pool: &PgPool,
+    slug: &str,
+) -> Result<Option<String>> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT product_id FROM product_seo WHERE slug = $1")
+            .bind(slug)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+pub async fn upsert_product_seo(
+    pool: &PgPool,
+    product_id: &str,
+    req: &ProductSeoRequest,
+) -> Result<ProductSeo> {
+    let faqs_json = serde_json::to_value(&req.faqs)?;
+    let seo = sqlx::query_as::<_, ProductSeo>(
+        r#"
+        INSERT INTO product_seo (
+            product_id, meta_title, meta_description, meta_keywords, slug,
+            search_terms, faqs, og_image_uuid, no_index, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        ON CONFLICT (product_id) DO UPDATE SET
+            meta_title       = EXCLUDED.meta_title,
+            meta_description = EXCLUDED.meta_description,
+            meta_keywords    = EXCLUDED.meta_keywords,
+            slug             = EXCLUDED.slug,
+            search_terms     = EXCLUDED.search_terms,
+            faqs             = EXCLUDED.faqs,
+            og_image_uuid    = EXCLUDED.og_image_uuid,
+            no_index         = EXCLUDED.no_index,
+            updated_at       = NOW()
+        RETURNING meta_title, meta_description, meta_keywords, slug, search_terms,
+                  faqs, og_image_uuid, no_index
+        "#,
+    )
+    .bind(product_id)
+    .bind(&req.meta_title)
+    .bind(&req.meta_description)
+    .bind(&req.meta_keywords)
+    .bind(&req.slug)
+    .bind(&req.search_terms)
+    .bind(&faqs_json)
+    .bind(&req.og_image_uuid)
+    .bind(req.no_index)
+    .fetch_one(pool)
+    .await?;
+    Ok(seo)
 }
 
 pub async fn get_top_product_ids(pool: &PgPool, limit: Option<i64>) -> Result<Vec<String>> {

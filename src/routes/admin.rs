@@ -82,7 +82,29 @@ pub async fn create_product(
 
     payload.discount = resolve_discount(payload.price, payload.discount, payload.discounted_price)?;
 
+    if let Some(ref seo) = payload.seo {
+        if let Some(ref slug) = seo.slug {
+            if let Some(other_id) =
+                admin_queries::find_product_seo_by_slug(&state.db, slug).await?
+            {
+                if &other_id != id {
+                    return Err(AppError::Conflict(format!(
+                        "slug '{}' უკვე გამოყენებულია",
+                        slug
+                    )));
+                }
+            }
+        }
+    }
+
     let product = admin_queries::create_product(&state.db, &payload).await?;
+
+    let seo = if let Some(ref seo_req) = payload.seo {
+        Some(admin_queries::upsert_product_seo(&state.db, &product.id, seo_req).await?)
+    } else {
+        None
+    };
+
     let images = products_queries::find_images_by_product_id(&state.db, &product.id).await?;
     let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
 
@@ -90,6 +112,7 @@ pub async fn create_product(
         data: product,
         images,
         categories,
+        seo,
     }))
 }
 
@@ -105,7 +128,29 @@ pub async fn update_product(
     let effective_price = payload.price.or(Some(existing.price));
     payload.discount = resolve_discount(effective_price, payload.discount, payload.discounted_price)?;
 
+    if let Some(ref seo) = payload.seo {
+        if let Some(ref slug) = seo.slug {
+            if let Some(other_id) =
+                admin_queries::find_product_seo_by_slug(&state.db, slug).await?
+            {
+                if other_id != id {
+                    return Err(AppError::Conflict(format!(
+                        "slug '{}' უკვე გამოყენებულია",
+                        slug
+                    )));
+                }
+            }
+        }
+    }
+
     let product = admin_queries::update_product(&state.db, &id, &payload).await?;
+
+    let seo = if let Some(ref seo_req) = payload.seo {
+        Some(admin_queries::upsert_product_seo(&state.db, &product.id, seo_req).await?)
+    } else {
+        admin_queries::get_product_seo(&state.db, &product.id).await?
+    };
+
     let images = products_queries::find_images_by_product_id(&state.db, &product.id).await?;
     let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
 
@@ -113,6 +158,7 @@ pub async fn update_product(
         data: product,
         images,
         categories,
+        seo,
     }))
 }
 
