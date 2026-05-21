@@ -2,8 +2,6 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-// DB models
-
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Order {
     pub id: i32,
@@ -60,8 +58,6 @@ pub struct OrderResponse {
     pub items: Vec<OrderItem>,
 }
 
-// Request types
-
 #[derive(Debug, Deserialize)]
 #[serde(tag = "customer_type", rename_all = "snake_case")]
 pub enum CustomerInfo {
@@ -99,8 +95,6 @@ pub struct CheckoutRequest {
     pub items: Vec<CartItem>,
 }
 
-// Internal types
-
 pub struct OrderItemData {
     pub product_id: String,
     pub color: Option<String>,
@@ -110,8 +104,6 @@ pub struct OrderItemData {
     pub image: serde_json::Value,
     pub cable_config: Option<serde_json::Value>,
 }
-
-// Response types
 
 #[derive(Debug, Serialize)]
 pub struct CheckoutResponse {

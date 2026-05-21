@@ -12,7 +12,6 @@ use crate::{
     },
 };
 
-/// Find category by ID
 pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Category>> {
     let category = sqlx::query_as::<_, Category>("SELECT * FROM categories WHERE id = $1")
         .bind(id)
@@ -22,7 +21,6 @@ pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Category>> {
     Ok(category)
 }
 
-/// Find category by slug
 pub async fn find_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Category>> {
     let category = sqlx::query_as::<_, Category>("SELECT * FROM categories WHERE slug = $1")
         .bind(slug)
@@ -32,7 +30,6 @@ pub async fn find_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Category>>
     Ok(category)
 }
 
-/// Get all categories (flat list)
 pub async fn get_all(pool: &PgPool, enabled_only: bool) -> Result<Vec<Category>> {
     let query = if enabled_only {
         "SELECT * FROM categories WHERE enabled = true ORDER BY display_order ASC, name ASC"
@@ -45,11 +42,9 @@ pub async fn get_all(pool: &PgPool, enabled_only: bool) -> Result<Vec<Category>>
     Ok(categories)
 }
 
-/// Get category tree (hierarchical structure)
 pub async fn get_category_tree(pool: &PgPool, enabled_only: bool) -> Result<CategoryTree> {
     let categories = get_all(pool, enabled_only).await?;
 
-    // Group categories by parent_id
     let mut children_map: HashMap<Option<i32>, Vec<Category>> = HashMap::new();
     for category in categories {
         children_map
@@ -58,7 +53,6 @@ pub async fn get_category_tree(pool: &PgPool, enabled_only: bool) -> Result<Cate
             .push(category);
     }
 
-    // Build tree recursively
     fn build_tree(
         parent_id: Option<i32>,
         children_map: &HashMap<Option<i32>, Vec<Category>>,
@@ -84,7 +78,6 @@ pub async fn get_category_tree(pool: &PgPool, enabled_only: bool) -> Result<Cate
     })
 }
 
-/// Get categories for a specific product
 pub async fn get_product_categories(pool: &PgPool, product_id: &str) -> Result<Vec<Category>> {
     let categories = sqlx::query_as::<_, Category>(
         "SELECT c.* FROM categories c
@@ -99,7 +92,6 @@ pub async fn get_product_categories(pool: &PgPool, product_id: &str) -> Result<V
     Ok(categories)
 }
 
-/// Create a new category
 pub async fn create_category(
     pool: &PgPool,
     req: CreateCategoryRequest,
@@ -121,7 +113,6 @@ pub async fn create_category(
     Ok(category)
 }
 
-/// Update an existing category
 pub async fn update_category(
     pool: &PgPool,
     id: i32,
@@ -185,7 +176,6 @@ pub async fn update_category(
     }
 
     if !has_fields {
-        // No fields to update, return existing category
         return find_by_id(pool, id).await;
     }
 
@@ -201,7 +191,6 @@ pub async fn update_category(
     Ok(category)
 }
 
-/// Delete a category
 pub async fn delete_category(pool: &PgPool, id: i32) -> Result<bool> {
     let result = sqlx::query("DELETE FROM categories WHERE id = $1")
         .bind(id)
@@ -211,19 +200,16 @@ pub async fn delete_category(pool: &PgPool, id: i32) -> Result<bool> {
     Ok(result.rows_affected() > 0)
 }
 
-/// Assign categories to a product
 pub async fn assign_categories_to_product(
     pool: &PgPool,
     product_id: &str,
     category_ids: &[i32],
 ) -> Result<()> {
-    // First, remove existing associations
     sqlx::query("DELETE FROM product_categories WHERE product_id = $1")
         .bind(product_id)
         .execute(pool)
         .await?;
 
-    // Then insert new associations
     if !category_ids.is_empty() {
         let mut query_builder =
             sqlx::QueryBuilder::new("INSERT INTO product_categories (product_id, category_id) ");
@@ -238,7 +224,6 @@ pub async fn assign_categories_to_product(
     Ok(())
 }
 
-/// Get category facets for product search
 pub async fn get_category_facets(
     pool: &PgPool,
     enabled_products_only: bool,
@@ -280,7 +265,6 @@ pub async fn get_category_facets(
     Ok(facets)
 }
 
-/// Get category image
 pub async fn get_category_image(
     pool: &PgPool,
     category_id: i32,
@@ -295,7 +279,6 @@ pub async fn get_category_image(
     Ok(image)
 }
 
-/// Get category images for multiple categories
 pub async fn get_category_images(
     pool: &PgPool,
     category_ids: &[i32],
@@ -319,14 +302,12 @@ pub async fn get_category_images(
     Ok(image_map)
 }
 
-/// Add category image
 pub async fn add_category_image(
     pool: &PgPool,
     category_id: i32,
     image_uuid: Uuid,
     extension: &str,
 ) -> Result<CategoryImage> {
-    // Delete any existing image for this category first
     sqlx::query("DELETE FROM category_images WHERE category_id = $1")
         .bind(category_id)
         .execute(pool)
@@ -346,7 +327,6 @@ pub async fn add_category_image(
     Ok(image)
 }
 
-/// Delete category image
 pub async fn delete_category_image(
     pool: &PgPool,
     category_id: i32,

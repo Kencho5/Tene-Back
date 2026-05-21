@@ -98,7 +98,7 @@ fn checkout_routes() -> Router<AppState> {
 
 fn admin_routes() -> Router<AppState> {
     Router::new()
-        //ADMIN PRODUCTS
+        // products
         .route("/admin/products", get(admin::search_products))
         .route("/admin/products", post(admin::create_product))
         .route("/admin/products/{id}", put(admin::update_product))
@@ -119,7 +119,7 @@ fn admin_routes() -> Router<AppState> {
             "/admin/products/{id}/categories",
             put(admin::assign_categories_to_product),
         )
-        //ADMIN CATEGORIES
+        // categories
         .route("/admin/categories", get(admin::get_all_categories_admin))
         .route(
             "/admin/categories/tree",
@@ -137,17 +137,17 @@ fn admin_routes() -> Router<AppState> {
             "/admin/categories/{id}/image/{image_uuid}",
             delete(admin::delete_category_image),
         )
-        //ADMIN BRANDS
+        // brands
         .route("/admin/brands", get(admin::get_brands))
         .route("/admin/brands", post(admin::create_brand))
         .route("/admin/brands/{id}", put(admin::update_brand))
         .route("/admin/brands/{id}", delete(admin::delete_brand))
-        //ADMIN CABLE TYPES
+        // cable types
         .route("/admin/cable-types", get(admin::get_cable_types))
         .route("/admin/cable-types", post(admin::create_cable_type))
         .route("/admin/cable-types/{id}", put(admin::update_cable_type))
         .route("/admin/cable-types/{id}", delete(admin::delete_cable_type))
-        //ADMIN CABLE VARIANTS
+        // cable variants
         .route(
             "/admin/cable-types/{type_id}/variants",
             get(admin::get_cable_variants),
@@ -164,7 +164,7 @@ fn admin_routes() -> Router<AppState> {
             "/admin/cable-types/{type_id}/variants/{variant_id}",
             delete(admin::delete_cable_variant),
         )
-        //ADMIN TASKS
+        // tasks
         .route("/admin/tasks", get(tasks::search_tasks))
         .route("/admin/tasks", post(tasks::create_task))
         .route("/admin/tasks/{id}", get(tasks::get_task))
@@ -179,12 +179,12 @@ fn admin_routes() -> Router<AppState> {
             "/admin/tasks/{id}/media/{media_uuid}",
             delete(tasks::delete_task_media),
         )
-        //ADMIN ANALYTICS
+        // analytics
         .route("/admin/analytics", get(admin::get_analytics))
-        //ADMIN TOP PRODUCTS
+        // top products
         .route("/admin/top-products", get(admin::get_top_products_admin))
         .route("/admin/top-products", put(admin::replace_top_products))
-        //ADMIN USERS
+        // users
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))
         .route("/admin/users/{id}", delete(admin::delete_user))

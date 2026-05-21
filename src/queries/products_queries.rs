@@ -30,8 +30,6 @@ pub async fn find_cable_variants_by_type_ids(
         .collect())
 }
 
-/// Single round-trip fetch of product detail page bundle.
-/// Returns the same shape as the previous 4-query path: product + images + categories + seo.
 pub async fn find_product_bundle(
     pool: &PgPool,
     id: &str,
@@ -207,7 +205,6 @@ pub async fn search_products(
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
 
-    // ID fast path
     if let Some(ref id) = params.id {
         let bundle = find_product_bundle(pool, id).await?;
         let matched = bundle.filter(|(p, _, _, _)| match params.enabled {
@@ -256,7 +253,6 @@ pub async fn search_products(
     }
     qb.push(", COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id");
     if needs_views {
-        // Single grouped scan over product_views instead of a per-row correlated subquery.
         qb.push(
             " LEFT JOIN (
                 SELECT product_id, COUNT(*) AS view_count
@@ -278,7 +274,6 @@ pub async fn search_products(
     }
 
     if let Some(q) = &params.query {
-        // trigram `%` op uses GIN trgm index when available; ILIKE handles substring.
         let like_q = format!("%{}%", escape_like(q));
         qb.push(" AND (p.name ILIKE ");
         qb.push_bind(like_q.clone());
@@ -319,7 +314,6 @@ pub async fn search_products(
         .collect();
 
     if !all_category_ids.is_empty() {
-        // Recursive descent expanded inline; planner caches once per execution.
         qb.push(
             " AND EXISTS (
                 SELECT 1 FROM product_categories pc
@@ -528,184 +522,208 @@ pub async fn get_related_products(
 }
 
 pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<ProductFacets> {
-    let mut filter_builder =
-        sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT p.id FROM products p WHERE 1=1");
-
-    if let Some(enabled) = params.enabled {
-        filter_builder.push(" AND p.enabled = ");
-        filter_builder.push_bind(enabled);
-    }
-
-    if let Some(q) = &params.query {
-        let like_q = format!("%{}%", escape_like(q));
-        filter_builder.push(" AND (p.name ILIKE ");
-        filter_builder.push_bind(like_q.clone());
-        filter_builder.push(" OR p.description ILIKE ");
-        filter_builder.push_bind(like_q);
-        filter_builder.push(" OR similarity(p.name, ");
-        filter_builder.push_bind(q);
-        filter_builder.push(") > 0.3 OR similarity(COALESCE(p.description, ''), ");
-        filter_builder.push_bind(q);
-        filter_builder.push(") > 0.3)");
-    }
-
-    if let Some(min_price) = params.price_from {
-        filter_builder.push(" AND p.price >= ");
-        filter_builder.push_bind(min_price);
-    }
-    if let Some(max_price) = params.price_to {
-        filter_builder.push(" AND p.price <= ");
-        filter_builder.push_bind(max_price);
-    }
-
-    if !params.color.is_empty() {
-        filter_builder.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
-        filter_builder.push_bind(&params.color);
-        filter_builder.push("))");
-    }
-
     let has_discount = params.sale_type.contains(&SaleType::Discount);
     let has_coins = params.sale_type.contains(&SaleType::Coins);
-    if has_discount && !has_coins {
-        filter_builder.push(" AND p.discount > 0");
-    } else if !has_discount && has_coins {
-        filter_builder.push(" AND false");
+    let force_empty = !has_discount && has_coins;
+
+    let mut qb = sqlx::QueryBuilder::<sqlx::Postgres>::new("");
+
+    qb.push("WITH parent_descendants AS (");
+    if params.parent_category_id.is_empty() {
+        qb.push("SELECT NULL::int AS id WHERE false");
+    } else {
+        qb.push(
+            "WITH RECURSIVE ct(id) AS (
+                SELECT id FROM categories WHERE id = ANY(",
+        );
+        qb.push_bind(&params.parent_category_id);
+        qb.push(
+            ")
+                UNION ALL
+                SELECT c.id FROM categories c JOIN ct ON c.parent_id = ct.id
+            )
+            SELECT id FROM ct",
+        );
+    }
+    qb.push("), child_descendants AS (");
+    if params.child_category_id.is_empty() {
+        qb.push("SELECT NULL::int AS id WHERE false");
+    } else {
+        qb.push(
+            "WITH RECURSIVE ct(id) AS (
+                SELECT id FROM categories WHERE id = ANY(",
+        );
+        qb.push_bind(&params.child_category_id);
+        qb.push(
+            ")
+                UNION ALL
+                SELECT c.id FROM categories c JOIN ct ON c.parent_id = ct.id
+            )
+            SELECT id FROM ct",
+        );
     }
 
-    // Apply parent category filter to base query (affects all facets including category facet)
+    qb.push("), base_ids AS (SELECT p.id FROM products p WHERE 1=1");
+
+    if force_empty {
+        qb.push(" AND false");
+    }
+    if let Some(enabled) = params.enabled {
+        qb.push(" AND p.enabled = ");
+        qb.push_bind(enabled);
+    }
+    if let Some(q) = &params.query {
+        let like_q = format!("%{}%", escape_like(q));
+        qb.push(" AND (p.name ILIKE ");
+        qb.push_bind(like_q.clone());
+        qb.push(" OR p.description ILIKE ");
+        qb.push_bind(like_q);
+        qb.push(" OR similarity(p.name, ");
+        qb.push_bind(q);
+        qb.push(") > 0.3 OR similarity(COALESCE(p.description, ''), ");
+        qb.push_bind(q);
+        qb.push(") > 0.3)");
+    }
+    if let Some(min_price) = params.price_from {
+        qb.push(" AND p.price >= ");
+        qb.push_bind(min_price);
+    }
+    if let Some(max_price) = params.price_to {
+        qb.push(" AND p.price <= ");
+        qb.push_bind(max_price);
+    }
+    if !params.color.is_empty() {
+        qb.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
+        qb.push_bind(&params.color);
+        qb.push("))");
+    }
+    if has_discount && !has_coins {
+        qb.push(" AND p.discount > 0");
+    }
     if !params.parent_category_id.is_empty() {
-        filter_builder.push(
+        qb.push(
             " AND EXISTS (
-                WITH RECURSIVE category_tree AS (
-                    SELECT id FROM categories WHERE id = ANY(",
-        );
-        filter_builder.push_bind(&params.parent_category_id);
-        filter_builder.push(
-            ")
-                    UNION ALL
-                    SELECT c.id FROM categories c
-                    INNER JOIN category_tree ct ON c.parent_id = ct.id
-                )
                 SELECT 1 FROM product_categories pc
                 WHERE pc.product_id = p.id
-                AND pc.category_id IN (SELECT id FROM category_tree)
+                AND pc.category_id IN (SELECT id FROM parent_descendants)
             )",
         );
     }
 
-    // Base IDs: without brand or child-category filters (for brand & category facets)
-    let base_ids: Vec<String> = filter_builder.build_query_scalar().fetch_all(pool).await?;
-
-    if base_ids.is_empty() {
-        return Ok(ProductFacets {
-            brands: Vec::new(),
-            colors: Vec::new(),
-            categories: Vec::new(),
-        });
+    qb.push("), category_filtered_ids AS (SELECT p.id FROM base_ids p");
+    if !params.child_category_id.is_empty() {
+        qb.push(
+            " WHERE EXISTS (
+                SELECT 1 FROM product_categories pc
+                WHERE pc.product_id = p.id
+                AND pc.category_id IN (SELECT id FROM child_descendants)
+            )",
+        );
     }
 
-    // Apply child-category filter on top of base IDs
-    let category_filtered_ids = if !params.child_category_id.is_empty() {
-        sqlx::query_scalar::<_, String>(
-            "SELECT DISTINCT p.id FROM products p
-             WHERE p.id = ANY($1)
-             AND EXISTS (
-                 WITH RECURSIVE category_tree AS (
-                     SELECT id FROM categories WHERE id = ANY($2)
-                     UNION ALL
-                     SELECT c.id FROM categories c
-                     INNER JOIN category_tree ct ON c.parent_id = ct.id
-                 )
-                 SELECT 1 FROM product_categories pc
-                 WHERE pc.product_id = p.id
-                 AND pc.category_id IN (SELECT id FROM category_tree)
-             )",
+    qb.push("), filtered_ids AS (SELECT c.id FROM category_filtered_ids c");
+    if let Some(brand_id) = params.brand {
+        qb.push(" JOIN products p ON p.id = c.id WHERE p.brand_id = ");
+        qb.push_bind(brand_id);
+    }
+
+    qb.push(
+        "), brand_facet AS (
+            SELECT b.id::text AS k1, b.name AS k2, COUNT(*)::bigint AS cnt
+            FROM category_filtered_ids c
+            JOIN products p ON p.id = c.id
+            JOIN brands b ON p.brand_id = b.id
+            GROUP BY b.id, b.name
+            ORDER BY cnt DESC
+            LIMIT 50
+        ), color_facet AS (
+            SELECT pi.color AS k1, NULL::text AS k2, COUNT(DISTINCT p.id)::bigint AS cnt
+            FROM filtered_ids f
+            JOIN products p ON p.id = f.id
+            JOIN product_images pi ON pi.product_id = p.id
+            WHERE pi.color IS NOT NULL AND pi.color != ''
+            GROUP BY pi.color
+            ORDER BY cnt DESC
+            LIMIT 50
+        ), category_facet AS (
+            SELECT c.id::text AS k1, c.name AS k2, COUNT(DISTINCT p.id)::bigint AS cnt,
+                   c.parent_id
+            FROM base_ids b
+            JOIN products p ON p.id = b.id
+            JOIN product_categories pc ON pc.product_id = p.id
+            JOIN categories c ON c.id = pc.category_id
+            WHERE c.enabled = true",
+    );
+    if let Some(brand_id) = params.brand {
+        qb.push(" AND p.brand_id = ");
+        qb.push_bind(brand_id);
+    }
+    if !params.parent_category_id.is_empty() {
+        qb.push(" AND c.id IN (SELECT id FROM parent_descendants)");
+    }
+    qb.push(
+        " GROUP BY c.id, c.parent_id, c.name
+            ORDER BY cnt DESC
+            LIMIT 100
         )
-        .bind(&base_ids)
-        .bind(&params.child_category_id)
-        .fetch_all(pool)
-        .await?
-    } else {
-        base_ids.clone()
-    };
+        SELECT 'b'::text AS tag, k1, k2, cnt, NULL::int AS parent_id FROM brand_facet
+        UNION ALL
+        SELECT 'c'::text AS tag, k1, k2, cnt, NULL::int AS parent_id FROM color_facet
+        UNION ALL
+        SELECT 'g'::text AS tag, k1, k2, cnt, parent_id FROM category_facet",
+    );
 
-    // Apply brand filter for fully filtered IDs (colors use this)
-    let filtered_ids = if let Some(brand_id) = params.brand {
-        sqlx::query_scalar::<_, String>(
-            "SELECT p.id FROM products p WHERE p.id = ANY($1) AND p.brand_id = $2",
-        )
-        .bind(&category_filtered_ids)
-        .bind(brand_id)
-        .fetch_all(pool)
-        .await?
-    } else {
-        category_filtered_ids.clone()
-    };
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        tag: String,
+        k1: Option<String>,
+        k2: Option<String>,
+        cnt: i64,
+        parent_id: Option<i32>,
+    }
 
-    // Category facet ID set: base IDs + brand filter, but NO child-category filter.
-    // Compute via SQL inside the categories query to avoid an extra round trip.
-    let brand_filter_opt = params.brand;
+    let rows: Vec<Row> = qb.build_query_as().fetch_all(pool).await?;
 
-    let brands_fut = sqlx::query_as::<_, BrandFacetValue>(
-        "SELECT b.id, b.name, COUNT(*)::bigint as count
-         FROM products p
-         JOIN brands b ON p.brand_id = b.id
-         WHERE p.id = ANY($1)
-         GROUP BY b.id, b.name
-         ORDER BY count DESC
-         LIMIT 50",
-    )
-    .bind(&category_filtered_ids)
-    .fetch_all(pool);
+    let mut brands = Vec::new();
+    let mut colors = Vec::new();
+    let mut categories = Vec::new();
 
-    let colors_fut = sqlx::query_as::<_, FacetValue>(
-        "SELECT pi.color as value, COUNT(DISTINCT p.id)::bigint as count
-         FROM product_images pi
-         JOIN products p ON pi.product_id = p.id
-         WHERE p.id = ANY($1) AND pi.color IS NOT NULL AND pi.color != ''
-         GROUP BY pi.color
-         ORDER BY count DESC
-         LIMIT 50",
-    )
-    .bind(&filtered_ids)
-    .fetch_all(pool);
-
-    let categories_fut = async {
-        // Categories use base_ids restricted by optional brand filter (no child-category filter).
-        let mut cb = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-            "SELECT c.id, c.parent_id, c.name, COUNT(DISTINCT p.id)::bigint as count
-             FROM product_categories pc
-             JOIN categories c ON pc.category_id = c.id
-             JOIN products p ON pc.product_id = p.id
-             WHERE p.id = ANY(",
-        );
-        cb.push_bind(&base_ids);
-        cb.push(") AND c.enabled = true");
-        if let Some(brand_id) = brand_filter_opt {
-            cb.push(" AND p.brand_id = ");
-            cb.push_bind(brand_id);
+    for r in rows {
+        match r.tag.as_str() {
+            "b" => {
+                if let (Some(id_str), Some(name)) = (r.k1, r.k2) {
+                    if let Ok(id) = id_str.parse::<i32>() {
+                        brands.push(BrandFacetValue {
+                            id,
+                            name,
+                            count: r.cnt,
+                        });
+                    }
+                }
+            }
+            "c" => {
+                if let Some(value) = r.k1 {
+                    colors.push(FacetValue {
+                        value,
+                        count: r.cnt,
+                    });
+                }
+            }
+            "g" => {
+                if let (Some(id_str), Some(name)) = (r.k1, r.k2) {
+                    if let Ok(id) = id_str.parse::<i32>() {
+                        categories.push(CategoryFacetValue {
+                            id,
+                            parent_id: r.parent_id,
+                            name,
+                            count: r.cnt,
+                        });
+                    }
+                }
+            }
+            _ => {}
         }
-        if !params.parent_category_id.is_empty() {
-            cb.push(
-                " AND c.id IN (
-                     WITH RECURSIVE ct(id) AS (
-                         SELECT id FROM categories WHERE id = ANY(",
-            );
-            cb.push_bind(&params.parent_category_id);
-            cb.push(
-                ")
-                         UNION ALL
-                         SELECT ch.id FROM categories ch JOIN ct ON ch.parent_id = ct.id
-                     )
-                     SELECT id FROM ct
-                 )",
-            );
-        }
-        cb.push(" GROUP BY c.id, c.parent_id, c.name ORDER BY count DESC LIMIT 100");
-        cb.build_query_as::<CategoryFacetValue>().fetch_all(pool).await
-    };
-
-    let (brands, colors, categories) = tokio::try_join!(brands_fut, colors_fut, categories_fut)?;
+    }
 
     Ok(ProductFacets {
         brands,

@@ -80,7 +80,7 @@ pub async fn update_product(pool: &PgPool, id: &str, req: &ProductRequest) -> Re
     Ok(product)
 }
 
-// BRAND QUERIES
+// brands
 pub async fn get_brands(pool: &PgPool) -> Result<Vec<Brand>> {
     let brands = sqlx::query_as::<_, Brand>("SELECT * FROM brands ORDER BY name ASC")
         .fetch_all(pool)
@@ -368,7 +368,7 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
 }
 
 pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<AnalyticsResponse> {
-    // All filter values are hardcoded SQL fragments from enum — no injection risk.
+    // these fragments come from a fixed enum so no injection risk
     let (where_pv, where_bare, join_pv) = match params.period {
         Some(AnalyticsPeriod::Today) => (
             "WHERE pv.viewed_at >= CURRENT_DATE",
@@ -498,7 +498,7 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
     })
 }
 
-// CABLE TYPES
+// cable types
 pub async fn get_cable_types(pool: &PgPool) -> Result<Vec<CableType>> {
     let types = sqlx::query_as::<_, CableType>("SELECT * FROM cable_types ORDER BY name ASC")
         .fetch_all(pool)
@@ -555,7 +555,7 @@ pub async fn delete_cable_type(pool: &PgPool, id: i32) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
-// CABLE VARIANTS
+// cable variants
 pub async fn get_cable_variants_by_type(
     pool: &PgPool,
     cable_type_id: i32,

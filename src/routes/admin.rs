@@ -55,7 +55,7 @@ fn resolve_discount(
     Ok(None)
 }
 
-//PRODUCT ROUTES
+// products
 pub async fn create_product(
     State(state): State<AppState>,
     Json(mut payload): Json<ProductRequest>,
@@ -311,7 +311,7 @@ pub async fn search_products(
     Ok(Json(response))
 }
 
-//USER ROUTES
+// users
 pub async fn search_users(
     State(state): State<AppState>,
     Query(params): Query<UserQuery>,
@@ -345,7 +345,7 @@ pub async fn delete_user(State(state): State<AppState>, Path(id): Path<i32>) -> 
     Ok(StatusCode::NO_CONTENT)
 }
 
-//CATEGORY ROUTES
+// categories
 pub async fn get_all_categories_admin(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CategoryResponse>>> {
@@ -384,7 +384,6 @@ pub async fn get_category_tree_admin(
 ) -> Result<Json<CategoryTreeResponse>> {
     let tree = category_queries::get_category_tree(&state.db, false).await?;
 
-    // Collect all category IDs from the tree
     fn collect_ids(nodes: &[crate::models::CategoryWithChildren], ids: &mut Vec<i32>) {
         for node in nodes {
             ids.push(node.category.id);
@@ -395,7 +394,6 @@ pub async fn get_category_tree_admin(
     let mut category_ids = Vec::new();
     collect_ids(&tree.categories, &mut category_ids);
 
-    // Fetch all images
     let images = category_queries::get_category_images(&state.db, &category_ids).await?;
 
     let env_prefix = match state.environment {
@@ -403,7 +401,6 @@ pub async fn get_category_tree_admin(
         crate::config::Environment::Main => "categories-main",
     };
 
-    // Build image URL helper
     let build_image_url = |category_id: i32| -> Option<String> {
         images.get(&category_id).map(|img| {
             format!(
@@ -413,7 +410,6 @@ pub async fn get_category_tree_admin(
         })
     };
 
-    // Convert tree to response with image URLs
     fn build_response_tree(
         nodes: Vec<crate::models::CategoryWithChildren>,
         build_url: &dyn Fn(i32) -> Option<String>,
@@ -604,7 +600,6 @@ pub async fn generate_category_image_url(
     Path(id): Path<i32>,
     Json(payload): Json<CategoryImageUploadRequest>,
 ) -> Result<Json<CategoryImageUploadUrl>> {
-    // Check if category exists
     if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
             "კატეგორია id-ით {} ვერ მოიძებნა",
@@ -663,7 +658,6 @@ pub async fn delete_category_image(
     State(state): State<AppState>,
     Path((id, image_uuid)): Path<(i32, Uuid)>,
 ) -> Result<StatusCode> {
-    // Check if category exists
     if category_queries::find_by_id(&state.db, id).await?.is_none() {
         return Err(AppError::NotFound(format!(
             "კატეგორია id-ით {} ვერ მოიძებნა",
@@ -671,7 +665,6 @@ pub async fn delete_category_image(
         )));
     }
 
-    // Get the image to find its extension
     let image = category_queries::get_category_image(&state.db, id)
         .await?
         .ok_or(AppError::NotFound("კატეგორიის სურათი ვერ მოიძებნა".to_string()))?;
@@ -696,7 +689,7 @@ pub async fn delete_category_image(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// BRAND ROUTES
+// brands
 pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>>> {
     let brands = admin_queries::get_brands(&state.db).await?;
     Ok(Json(brands))
@@ -760,7 +753,7 @@ pub async fn delete_brand(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// CABLE TYPE ROUTES
+// cable types
 pub async fn get_cable_types(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CableTypeWithVariants>>> {
@@ -848,7 +841,7 @@ pub async fn delete_cable_type(
     Ok(StatusCode::NO_CONTENT)
 }
 
-// CABLE VARIANT ROUTES
+// cable variants
 pub async fn get_cable_variants(
     State(state): State<AppState>,
     Path(type_id): Path<i32>,
@@ -1009,7 +1002,7 @@ pub async fn get_analytics(
     Ok(Json(analytics))
 }
 
-// TOP PRODUCTS ROUTES
+// top products
 pub async fn get_top_products_admin(
     State(state): State<AppState>,
     Query(params): Query<TopProductsQuery>,

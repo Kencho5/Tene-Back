@@ -12,7 +12,6 @@ pub async fn get_category_tree(
 ) -> Result<Json<CategoryTreeResponse>> {
     let tree = category_queries::get_category_tree(&state.db, true).await?;
 
-    // Collect all category IDs from the tree
     fn collect_ids(
         nodes: &[crate::models::CategoryWithChildren],
         ids: &mut Vec<i32>,
@@ -26,7 +25,6 @@ pub async fn get_category_tree(
     let mut category_ids = Vec::new();
     collect_ids(&tree.categories, &mut category_ids);
 
-    // Fetch all images
     let images = category_queries::get_category_images(&state.db, &category_ids).await?;
 
     let env_prefix = match state.environment {
@@ -34,7 +32,6 @@ pub async fn get_category_tree(
         crate::config::Environment::Main => "categories-main",
     };
 
-    // Build image URL helper
     let build_image_url = |category_id: i32| -> Option<String> {
         images.get(&category_id).map(|img| {
             format!(
@@ -44,7 +41,6 @@ pub async fn get_category_tree(
         })
     };
 
-    // Convert tree to response with image URLs
     fn build_response_tree(
         nodes: Vec<crate::models::CategoryWithChildren>,
         build_url: &dyn Fn(i32) -> Option<String>,
