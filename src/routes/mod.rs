@@ -38,6 +38,7 @@ pub fn create_router() -> Router<AppState> {
 fn auth_routes() -> Router<AppState> {
     Router::new()
         .route("/register", post(register::register_user))
+        .route("/register/verify", post(register::verify_and_register))
         .route("/login", post(login::login_user))
         .route("/google-login", post(google_auth::google_auth))
         .route("/send-code", post(send_code::send_verification_code))

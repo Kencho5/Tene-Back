@@ -30,6 +30,14 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct VerifyAndRegisterRequest {
+    pub email: String,
+    pub name: String,
+    pub password: String,
+    pub code: i32,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
