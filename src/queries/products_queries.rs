@@ -30,6 +30,82 @@ pub async fn find_cable_variants_by_type_ids(
         .collect())
 }
 
+/// Single round-trip fetch of product detail page bundle.
+/// Returns the same shape as the previous 4-query path: product + images + categories + seo.
+pub async fn find_product_bundle(
+    pool: &PgPool,
+    id: &str,
+) -> Result<Option<(Product, Vec<ProductImage>, Vec<Category>, Option<crate::models::ProductSeo>)>> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        #[sqlx(flatten)]
+        product: Product,
+        images_json: serde_json::Value,
+        categories_json: serde_json::Value,
+        seo_json: Option<serde_json::Value>,
+    }
+
+    let row = sqlx::query_as::<_, Row>(
+        r#"
+        SELECT
+            p.*,
+            b.name AS brand_name,
+            COALESCE((
+                SELECT jsonb_agg(
+                    jsonb_build_object(
+                        'product_id', pi.product_id,
+                        'image_uuid', pi.image_uuid,
+                        'color', pi.color,
+                        'is_primary', pi.is_primary,
+                        'extension', pi.extension,
+                        'quantity', pi.quantity
+                    )
+                    ORDER BY pi.is_primary DESC, pi.created_at ASC
+                )
+                FROM product_images pi
+                WHERE pi.product_id = p.id
+            ), '[]'::jsonb) AS images_json,
+            COALESCE((
+                SELECT jsonb_agg(to_jsonb(c) ORDER BY c.display_order ASC, c.name ASC)
+                FROM product_categories pc
+                JOIN categories c ON c.id = pc.category_id
+                WHERE pc.product_id = p.id
+            ), '[]'::jsonb) AS categories_json,
+            (
+                SELECT jsonb_build_object(
+                    'meta_title', s.meta_title,
+                    'meta_description', s.meta_description,
+                    'meta_keywords', s.meta_keywords,
+                    'slug', s.slug,
+                    'search_terms', s.search_terms,
+                    'faqs', s.faqs,
+                    'og_image_uuid', s.og_image_uuid,
+                    'no_index', s.no_index
+                )
+                FROM product_seo s
+                WHERE s.product_id = p.id
+            ) AS seo_json
+        FROM products p
+        LEFT JOIN brands b ON p.brand_id = b.id
+        WHERE p.id = $1
+        "#,
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else { return Ok(None) };
+
+    let images: Vec<ProductImage> = serde_json::from_value(row.images_json)?;
+    let categories: Vec<Category> = serde_json::from_value(row.categories_json)?;
+    let seo: Option<crate::models::ProductSeo> = match row.seo_json {
+        Some(v) => Some(serde_json::from_value(v)?),
+        None => None,
+    };
+
+    Ok(Some((row.product, images, categories, seo)))
+}
+
 pub async fn find_by_id(pool: &PgPool, id: &str) -> Result<Option<Product>> {
     let product = sqlx::query_as::<_, Product>(
         "SELECT p.*, b.name as brand_name FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = $1"
@@ -133,27 +209,14 @@ pub async fn search_products(
 
     // ID fast path
     if let Some(ref id) = params.id {
-        let mut q = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-            "SELECT p.*, b.name as brand_name FROM products p \
-             LEFT JOIN brands b ON p.brand_id = b.id WHERE p.id = ",
-        );
-        q.push_bind(id);
-        if let Some(enabled) = params.enabled {
-            q.push(" AND p.enabled = ");
-            q.push_bind(enabled);
-        }
-        let product = q
-            .build_query_as::<Product>()
-            .fetch_optional(pool)
-            .await?;
+        let bundle = find_product_bundle(pool, id).await?;
+        let matched = bundle.filter(|(p, _, _, _)| match params.enabled {
+            Some(enabled) => p.enabled == enabled,
+            None => true,
+        });
 
-        return match product {
-            Some(product) => {
-                let (images, categories, seo) = tokio::try_join!(
-                    find_images_by_product_id(pool, id),
-                    crate::queries::category_queries::get_product_categories(pool, id),
-                    crate::queries::admin_queries::get_product_seo(pool, id),
-                )?;
+        return match matched {
+            Some((product, images, categories, seo)) => {
                 Ok(crate::models::ProductSearchResponse {
                     products: vec![ProductResponse {
                         data: product,
@@ -189,9 +252,21 @@ pub async fn search_products(
         qb.push(")) as relevance_score");
     }
     if needs_views {
-        qb.push(", (SELECT COUNT(*) FROM product_views pv WHERE pv.product_id = p.id AND pv.viewed_at >= NOW() - INTERVAL '7 days') as view_count");
+        qb.push(", COALESCE(pvc.view_count, 0) as view_count");
     }
-    qb.push(", COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id WHERE 1=1");
+    qb.push(", COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id");
+    if needs_views {
+        // Single grouped scan over product_views instead of a per-row correlated subquery.
+        qb.push(
+            " LEFT JOIN (
+                SELECT product_id, COUNT(*) AS view_count
+                FROM product_views
+                WHERE viewed_at >= NOW() - INTERVAL '7 days'
+                GROUP BY product_id
+            ) pvc ON pvc.product_id = p.id",
+        );
+    }
+    qb.push(" WHERE 1=1");
 
     if let Some(enabled) = params.enabled {
         qb.push(" AND p.enabled = ");
