@@ -173,20 +173,50 @@ pub async fn build_products_response_ordered(
 
     let products_map = find_by_ids(pool, ordered_ids).await?;
     let mut image_groups = find_images_by_product_ids(pool, ordered_ids).await?;
+    let mut seo_map = find_seo_by_product_ids(pool, ordered_ids).await?;
 
     let mut out = Vec::with_capacity(ordered_ids.len());
     for id in ordered_ids {
         if let Some(product) = products_map.get(id).cloned() {
             let images = image_groups.remove(id).unwrap_or_default();
+            let seo = seo_map.remove(id);
             out.push(ProductResponse {
                 data: product,
                 images,
                 categories: Vec::new(),
-                seo: None,
+                seo,
             });
         }
     }
     Ok(out)
+}
+
+pub async fn find_seo_by_product_ids(
+    pool: &PgPool,
+    ids: &[String],
+) -> Result<HashMap<String, crate::models::ProductSeo>> {
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        product_id: String,
+        #[sqlx(flatten)]
+        seo: crate::models::ProductSeo,
+    }
+
+    let rows = sqlx::query_as::<_, Row>(
+        "SELECT product_id, meta_title, meta_description, meta_keywords, slug,
+                search_terms, faqs, og_image_uuid, no_index
+         FROM product_seo
+         WHERE product_id = ANY($1)",
+    )
+    .bind(ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().map(|r| (r.product_id, r.seo)).collect())
 }
 
 fn escape_like(s: &str) -> String {
@@ -450,6 +480,8 @@ pub async fn search_products(
                 acc
             });
 
+    let mut seo_map = find_seo_by_product_ids(pool, &product_ids).await?;
+
     let products = results
         .into_iter()
         .map(|result| ProductResponse {
@@ -457,8 +489,8 @@ pub async fn search_products(
             categories: category_groups
                 .remove(&result.product.id)
                 .unwrap_or_default(),
+            seo: seo_map.remove(&result.product.id),
             data: result.product,
-            seo: None,
         })
         .collect();
 
@@ -504,16 +536,18 @@ pub async fn get_related_products(
 
     let product_ids: Vec<String> = products.iter().map(|p| p.id.clone()).collect();
     let mut image_groups = find_images_by_product_ids(pool, &product_ids).await?;
+    let mut seo_map = find_seo_by_product_ids(pool, &product_ids).await?;
 
     let responses = products
         .into_iter()
         .map(|product| {
             let images = image_groups.remove(&product.id).unwrap_or_default();
+            let seo = seo_map.remove(&product.id);
             ProductResponse {
                 data: product,
                 images,
                 categories: Vec::new(),
-                seo: None,
+                seo,
             }
         })
         .collect();
