@@ -10,7 +10,7 @@ use crate::{
     utils::jwt,
 };
 
-const SENDER_EMAIL: &str = "suport@tene.ge";
+const SENDER_EMAIL: &str = "Tene <support@tene.ge>";
 
 pub async fn register_user(
     State(state): State<AppState>,

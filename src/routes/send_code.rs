@@ -17,7 +17,7 @@ pub async fn send_verification_code(
 
     let code = rand::rng().random_range(100000..999999);
 
-    let sender_email = "suport@tene.ge".to_string();
+    let sender_email = "Tene <support@tene.ge>".to_string();
 
     email_queries::delete_codes_for_email(&state.db, &payload.email).await?;
 
