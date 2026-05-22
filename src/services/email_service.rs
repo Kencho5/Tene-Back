@@ -31,6 +31,33 @@ pub async fn send_order_confirmation_email(
     send_email(ses_client, SENDER_EMAIL, &order.email, &subject, &html).await
 }
 
+pub async fn send_operator_order_notification(
+    ses_client: &SesClient,
+    operator_emails: &[String],
+    order: &Order,
+    items: &[OrderItem],
+) -> Result<()> {
+    if operator_emails.is_empty() {
+        return Ok(());
+    }
+
+    let html = render_order_confirmation(order, items);
+    let subject = format!("ახალი შეკვეთა {}", order.order_id);
+
+    for recipient in operator_emails {
+        if let Err(e) = send_email(ses_client, SENDER_EMAIL, recipient, &subject, &html).await {
+            tracing::error!(
+                "Failed to send operator notification to {} for order {}: {:?}",
+                recipient,
+                order.order_id,
+                e
+            );
+        }
+    }
+
+    Ok(())
+}
+
 fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
     let mut rows = String::new();
     let mut subtotal = Decimal::ZERO;
@@ -95,7 +122,7 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
         if let Some(t) = &order.organization_type {
             html.push_str(&format!(
                 "<div class=\"info-row\"><strong>ორგ. ტიპი:</strong> {}</div>",
-                html_escape(t)
+                html_escape(translate_org_type(t))
             ));
         }
         if let Some(c) = &order.organization_code {
@@ -111,7 +138,14 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
 
     let delivery_type_label = match order.delivery_type.as_str() {
         "pickup" => "თვითგატანა",
-        "courier" => "კურიერი",
+        "courier" | "delivery" => "მიწოდება",
+        other => other,
+    };
+
+    let delivery_time_label = match order.delivery_time.as_str() {
+        "same_day" => "იმავე დღეს",
+        "next_day" => "მეორე დღეს",
+        "standard" => "სტანდარტული",
         other => other,
     };
 
@@ -122,7 +156,7 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
         if let Some(city) = &order.city {
             html.push_str(&format!(
                 "<div class=\"info-row\"><strong>ქალაქი:</strong> {}</div>",
-                html_escape(city)
+                html_escape(translate_city(city))
             ));
         }
         html.push_str(&format!(
@@ -152,12 +186,7 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
         })
         .unwrap_or_default();
 
-    let payment_id = order
-        .payment_id
-        .map(|p| p.to_string())
-        .unwrap_or_else(|| "—".to_string());
-
-    let created_at = order.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
+    let created_at = format_created_at(&order.created_at);
 
     include_str!("../utils/order_confirmation.html")
         .replace("{{order_id}}", &html_escape(&order.order_id))
@@ -171,11 +200,48 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
         .replace("{{phone}}", &html_escape(&order.phone_number))
         .replace("{{organization_block}}", &organization_block)
         .replace("{{delivery_type}}", delivery_type_label)
-        .replace("{{delivery_time}}", &html_escape(&order.delivery_time))
+        .replace("{{delivery_time}}", delivery_time_label)
         .replace("{{address_block}}", &address_block)
         .replace("{{comment_block}}", &comment_block)
-        .replace("{{currency}}", &html_escape(&order.currency))
-        .replace("{{payment_id}}", &html_escape(&payment_id))
+}
+
+fn translate_city(city: &str) -> &str {
+    match city.trim().to_lowercase().as_str() {
+        "tbilisi" => "თბილისი",
+        "batumi" => "ბათუმი",
+        "kutaisi" => "ქუთაისი",
+        "rustavi" => "რუსთავი",
+        "gori" => "გორი",
+        "zugdidi" => "ზუგდიდი",
+        "poti" => "ფოთი",
+        "telavi" => "თელავი",
+        "akhaltsikhe" => "ახალციხე",
+        "ozurgeti" => "ოზურგეთი",
+        "mtskheta" => "მცხეთა",
+        "kobuleti" => "ქობულეთი",
+        "svaneti" => "სვანეთი",
+        "racha" => "რაჭა",
+        "khevsureti" => "ხევსურეთი",
+        "tusheti" => "თუშეთი",
+        "zemo-acshara" => "ზემო აჭარა",
+        _ => city,
+    }
+}
+
+fn translate_org_type(t: &str) -> &str {
+    match t.trim().to_lowercase().as_str() {
+        "individual" => "ინდივიდუალური",
+        "llc" | "ltd" => "შპს",
+        "jsc" => "სს",
+        "ip" => "ი/მ",
+        "ngo" => "ააიპ",
+        _ => t,
+    }
+}
+
+fn format_created_at(dt: &chrono::DateTime<chrono::Utc>) -> String {
+    let tbilisi = chrono::FixedOffset::east_opt(4 * 3600).unwrap();
+    dt.with_timezone(&tbilisi).format("%d.%m.%Y %H:%M").to_string()
 }
 
 fn format_money(amount: Decimal) -> String {

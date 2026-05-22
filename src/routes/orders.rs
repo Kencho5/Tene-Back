@@ -14,7 +14,7 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{CableVariant, CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
-    queries::{order_queries, products_queries},
+    queries::{admin_queries, order_queries, products_queries},
     services::{delivery_service, email_service, flitt_service},
     utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
@@ -311,6 +311,30 @@ pub async fn flitt_callback(
                                 order_id,
                                 e
                             );
+                        }
+
+                        match admin_queries::get_operator_emails(&state.db).await {
+                            Ok(operator_emails) => {
+                                if let Err(e) = email_service::send_operator_order_notification(
+                                    &state.ses_client,
+                                    &operator_emails,
+                                    &order,
+                                    &items,
+                                )
+                                .await
+                                {
+                                    tracing::error!(
+                                        "Failed to send operator notification for {}: {:?}",
+                                        order_id,
+                                        e
+                                    );
+                                }
+                            }
+                            Err(e) => tracing::error!(
+                                "Failed to load operator emails for {}: {:?}",
+                                order_id,
+                                e
+                            ),
                         }
                     }
                     Err(e) => tracing::error!(

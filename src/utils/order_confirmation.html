@@ -295,7 +295,7 @@
         color: #f6f6f6;
       "
     >
-      თქვენი შეკვეთა მიღებულია — {{order_id}}
+      შეკვეთა მიღებულია — {{order_id}}
     </div>
 
     <table
@@ -326,12 +326,9 @@
 
             <tr>
               <td class="hero">
-                <span class="badge">✓ შეკვეთა მიღებულია</span>
+                <span class="badge">✓ მიღებულია</span>
                 <div class="title">გმადლობთ შეკვეთისთვის!</div>
-                <p class="intro">
-                  თქვენი გადახდა წარმატებით დადასტურდა. ქვემოთ იხილავთ შეკვეთის
-                  სრულ დეტალებს.
-                </p>
+                <p class="intro">დეტალები ქვემოთ.</p>
                 <div class="meta-block">
                   <span class="order-id">{{order_id}}</span>
                   <span class="order-date">{{created_at}}</span>
@@ -352,7 +349,7 @@
                   {{items_rows}}
                 </table>
 
-                <div class="section-label">გადახდის შეჯამება</div>
+                <div class="section-label">შეჯამება</div>
                 <div class="totals-box">
                   <table
                     class="totals"
@@ -401,19 +398,9 @@
 
                 {{comment_block}}
 
-                <div class="section-label">გადახდა</div>
-                <div class="info-grid">
-                  <div class="info-row">
-                    <strong>ვალუტა</strong> {{currency}}
-                  </div>
-                  <div class="info-row">
-                    <strong>გადახდის ID</strong> {{payment_id}}
-                  </div>
-                </div>
-
                 <div class="help">
-                  გჭირდებათ დახმარება? მოგვწერეთ
-                  <a href="mailto:support@tene.ge">support@tene.ge</a>
+                  დახმარება:
+                  <a href="mailto:info@tene.ge">info@tene.ge</a>
                 </div>
               </td>
             </tr>
@@ -421,7 +408,7 @@
             <tr>
               <td class="footer">
                 © Tene · <a href="https://tene.ge">tene.ge</a><br />
-                ეს არის ავტომატური წერილი — გთხოვთ, არ უპასუხოთ.
+                ავტომატური წერილი — ნუ უპასუხებთ.
               </td>
             </tr>
           </table>

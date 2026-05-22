@@ -289,6 +289,16 @@ pub async fn update_user(pool: &PgPool, id: i32, req: &UserRequest) -> Result<Us
     Ok(user)
 }
 
+pub async fn get_operator_emails(pool: &PgPool) -> Result<Vec<String>> {
+    let emails = sqlx::query_scalar::<_, String>(
+        "SELECT email FROM users WHERE role = 'operator'",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(emails)
+}
+
 pub async fn delete_user(pool: &PgPool, id: i32) -> Result<u64> {
     let result = sqlx::query("DELETE FROM users WHERE id = $1")
         .bind(id)
