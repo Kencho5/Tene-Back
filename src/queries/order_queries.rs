@@ -6,6 +6,18 @@ use crate::{
     models::{CheckoutRequest, CustomerInfo, Order, OrderItem, OrderItemData},
 };
 
+pub struct OrderContact<'a> {
+    pub customer: &'a CustomerInfo,
+    pub email: &'a str,
+    pub phone_number: &'a str,
+    pub address: &'a str,
+    pub city: Option<&'a str>,
+    pub details: Option<&'a str>,
+    pub delivery_type: &'a str,
+    pub delivery_time: &'a str,
+    pub comment: Option<&'a str>,
+}
+
 pub async fn create_order_with_items(
     pool: &PgPool,
     user_id: Option<i32>,
@@ -14,10 +26,32 @@ pub async fn create_order_with_items(
     req: &CheckoutRequest,
     items: &[OrderItemData],
 ) -> Result<Order> {
+    let contact = OrderContact {
+        customer: &req.customer,
+        email: &req.email,
+        phone_number: &req.phone_number,
+        address: &req.address,
+        city: req.city.as_deref(),
+        details: req.details.as_deref(),
+        delivery_type: &req.delivery_type,
+        delivery_time: &req.delivery_time,
+        comment: req.comment.as_deref(),
+    };
+    create_order_with_items_raw(pool, user_id, order_id, amount, &contact, items).await
+}
+
+pub async fn create_order_with_items_raw(
+    pool: &PgPool,
+    user_id: Option<i32>,
+    order_id: &str,
+    amount: i32,
+    contact: &OrderContact<'_>,
+    items: &[OrderItemData],
+) -> Result<Order> {
     let mut tx = pool.begin().await?;
 
     let (customer_type, customer_name, customer_surname, org_type, org_name, org_code) =
-        match &req.customer {
+        match contact.customer {
             CustomerInfo::Individual { name, surname } => (
                 "individual",
                 Some(name.as_str()),
@@ -56,14 +90,14 @@ pub async fn create_order_with_items(
     .bind(org_type)
     .bind(org_name)
     .bind(org_code)
-    .bind(&req.email)
-    .bind(&req.phone_number)
-    .bind(&req.address)
-    .bind(&req.city)
-    .bind(&req.details)
-    .bind(&req.delivery_type)
-    .bind(&req.delivery_time)
-    .bind(&req.comment)
+    .bind(contact.email)
+    .bind(contact.phone_number)
+    .bind(contact.address)
+    .bind(contact.city)
+    .bind(contact.details)
+    .bind(contact.delivery_type)
+    .bind(contact.delivery_time)
+    .bind(contact.comment)
     .fetch_one(&mut *tx)
     .await?;
 

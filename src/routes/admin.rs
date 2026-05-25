@@ -6,14 +6,17 @@ use axum::{
 use http::StatusCode;
 use uuid::Uuid;
 
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, prelude::ToPrimitive};
 
 use crate::{
     AppState,
     error::{AppError, Result},
     models::*,
-    queries::{admin_queries, category_queries, products_queries, user_queries},
-    services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
+    queries::{admin_queries, category_queries, order_queries, products_queries, user_queries},
+    services::{
+        delivery_service, flitt_service,
+        image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
+    },
 };
 
 fn resolve_discount(
@@ -992,6 +995,107 @@ pub async fn get_orders(
 ) -> Result<Json<OrderSearchResponse>> {
     let response = admin_queries::get_orders(&state.db, params).await?;
     Ok(Json(response))
+}
+
+pub async fn create_payment_link(
+    State(state): State<AppState>,
+    Json(payload): Json<PaymentLinkRequest>,
+) -> Result<Json<CheckoutResponse>> {
+    if payload.items.is_empty() {
+        return Err(AppError::BadRequest("შეკვეთა ცარიელია".to_string()));
+    }
+    if payload.email.is_empty() || !payload.email.contains('@') {
+        return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
+    }
+
+    let mut subtotal = Decimal::ZERO;
+    let mut order_items = Vec::with_capacity(payload.items.len());
+    for item in &payload.items {
+        if item.quantity <= 0 {
+            return Err(AppError::BadRequest(format!(
+                "არასწორი რაოდენობა პროდუქტისთვის {}",
+                item.product_id
+            )));
+        }
+        if item.price < Decimal::ZERO {
+            return Err(AppError::BadRequest(format!(
+                "არასწორი ფასი პროდუქტისთვის {}",
+                item.product_id
+            )));
+        }
+        subtotal += item.price * Decimal::from(item.quantity);
+        order_items.push(OrderItemData {
+            product_id: item.product_id.clone(),
+            color: item.color.clone(),
+            quantity: item.quantity,
+            price: item.price,
+            product_name: item.product_name.clone(),
+            image: serde_json::Value::Null,
+            cable_config: None,
+        });
+    }
+
+    let delivery = delivery_service::calculate_delivery(
+        &payload.delivery_type,
+        &payload.delivery_time,
+        payload.city.as_deref(),
+    )?;
+
+    let amount_tetri = ((subtotal + delivery) * Decimal::from(100))
+        .trunc()
+        .to_i32()
+        .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
+
+    if amount_tetri <= 0 {
+        return Err(AppError::BadRequest(
+            "შეკვეთის თანხა უნდა იყოს დადებითი".to_string(),
+        ));
+    }
+
+    let order_id = format!("tene_{}", Uuid::new_v4());
+
+    let contact = order_queries::OrderContact {
+        customer: &payload.customer,
+        email: &payload.email,
+        phone_number: &payload.phone_number,
+        address: &payload.address,
+        city: payload.city.as_deref(),
+        details: payload.details.as_deref(),
+        delivery_type: &payload.delivery_type,
+        delivery_time: &payload.delivery_time,
+        comment: payload.comment.as_deref(),
+    };
+
+    order_queries::create_order_with_items_raw(
+        &state.db,
+        None,
+        &order_id,
+        amount_tetri,
+        &contact,
+        &order_items,
+    )
+    .await?;
+
+    let server_callback_url = format!("{}/payments/callback", state.backend_url);
+    let response_url = format!("{}/payments/redirect", state.backend_url);
+
+    let checkout_url = flitt_service::create_checkout_url(
+        state.flitt_merchant_id,
+        &state.flitt_secret_key,
+        &order_id,
+        amount_tetri,
+        &format!("Tene order {}", order_id),
+        &server_callback_url,
+        &response_url,
+    )
+    .await?;
+
+    order_queries::update_order_checkout_url(&state.db, &order_id, &checkout_url).await?;
+
+    Ok(Json(CheckoutResponse {
+        order_id,
+        checkout_url,
+    }))
 }
 
 pub async fn get_analytics(

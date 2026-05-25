@@ -195,5 +195,9 @@ fn admin_routes() -> Router<AppState> {
 fn operator_routes() -> Router<AppState> {
     Router::new()
         .route("/admin/orders", get(admin::get_orders))
+        .route(
+            "/admin/orders/payment-link",
+            post(admin::create_payment_link),
+        )
         .layer(middleware::from_fn(operator_middleware))
 }

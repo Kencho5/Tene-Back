@@ -111,3 +111,27 @@ pub struct CheckoutResponse {
     pub checkout_url: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PaymentLinkItem {
+    pub product_id: String,
+    pub product_name: String,
+    pub color: Option<String>,
+    pub quantity: i32,
+    pub price: Decimal,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PaymentLinkRequest {
+    #[serde(flatten)]
+    pub customer: CustomerInfo,
+    pub email: String,
+    pub phone_number: String,
+    pub address: String,
+    pub city: Option<String>,
+    pub details: Option<String>,
+    pub delivery_type: String,
+    pub delivery_time: String,
+    pub comment: Option<String>,
+    pub items: Vec<PaymentLinkItem>,
+}
+
