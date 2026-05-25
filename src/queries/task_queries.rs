@@ -98,7 +98,9 @@ pub async fn search_tasks(pool: &PgPool, params: TaskQuery) -> Result<(Vec<Task>
         qb.push_bind(priority);
     }
 
-    qb.push(" ORDER BY created_at DESC LIMIT ");
+    qb.push(
+        " ORDER BY CASE WHEN state = 'done' THEN updated_at END DESC NULLS LAST, created_at DESC LIMIT ",
+    );
     qb.push_bind(limit);
     qb.push(" OFFSET ");
     qb.push_bind(offset);
