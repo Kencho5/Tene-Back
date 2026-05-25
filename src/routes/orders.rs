@@ -35,7 +35,6 @@ pub async fn checkout(
         &payload.delivery_type,
         &payload.delivery_time,
         payload.city.as_deref(),
-        subtotal,
     )?;
 
     let amount_tetri = ((subtotal + delivery) * Decimal::from(100))

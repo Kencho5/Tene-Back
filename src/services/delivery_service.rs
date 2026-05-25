@@ -2,8 +2,6 @@ use rust_decimal::{Decimal, dec};
 
 use crate::error::{AppError, Result};
 
-pub const FREE_SHIPPING_THRESHOLD: Decimal = dec!(100);
-
 const TBILISI: &str = "tbilisi";
 const HIGH_MOUNTAIN_CITIES: &[&str] = &[
     "svaneti",
@@ -22,7 +20,6 @@ pub fn calculate_delivery(
     delivery_type: &str,
     delivery_time: &str,
     city: Option<&str>,
-    subtotal: Decimal,
 ) -> Result<Decimal> {
     if delivery_type == "pickup" {
         return Ok(Decimal::ZERO);
@@ -37,10 +34,6 @@ pub fn calculate_delivery(
         return Err(AppError::BadRequest(
             "იმავე დღეს მიწოდება ხელმისაწვდომია მხოლოდ თბილისში".to_string(),
         ));
-    }
-
-    if subtotal >= FREE_SHIPPING_THRESHOLD {
-        return Ok(Decimal::ZERO);
     }
 
     let cost = if is_tbilisi {
