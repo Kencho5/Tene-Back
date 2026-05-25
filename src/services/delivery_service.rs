@@ -13,8 +13,8 @@ const HIGH_MOUNTAIN_CITIES: &[&str] = &[
 
 const TBILISI_SAME_DAY: Decimal = dec!(15);
 const TBILISI_STANDARD: Decimal = dec!(6);
-const HIGH_MOUNTAIN: Decimal = dec!(13.50);
-const STANDARD: Decimal = dec!(8.50);
+const HIGH_MOUNTAIN: Decimal = dec!(8);
+const STANDARD: Decimal = dec!(6);
 
 pub fn calculate_delivery(
     delivery_type: &str,
