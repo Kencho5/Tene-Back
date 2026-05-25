@@ -11,7 +11,7 @@ const HIGH_MOUNTAIN_CITIES: &[&str] = &[
     "zemo-acshara",
 ];
 
-const TBILISI_SAME_DAY: Decimal = dec!(12);
+const TBILISI_SAME_DAY: Decimal = dec!(15);
 const TBILISI_STANDARD: Decimal = dec!(6);
 const HIGH_MOUNTAIN: Decimal = dec!(13.50);
 const STANDARD: Decimal = dec!(8.50);
