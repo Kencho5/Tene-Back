@@ -137,10 +137,9 @@ pub async fn update_order_status_and_deduct_stock(
 ) -> Result<Option<(Order, bool)>> {
     let mut tx = pool.begin().await?;
 
-    // only update if still pending so repeated callbacks don't double-process
     let order = sqlx::query_as::<_, Order>(
         "UPDATE orders SET status = $1, payment_id = $2, updated_at = NOW()
-         WHERE order_id = $3 AND status = 'pending' RETURNING *",
+         WHERE order_id = $3 AND status <> 'approved' RETURNING *",
     )
     .bind(status)
     .bind(payment_id)
