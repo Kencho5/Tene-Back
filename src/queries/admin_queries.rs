@@ -4,8 +4,9 @@ use crate::{
     error::Result,
     models::{
         AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
-        CableVariant, CableVariantRequest, CableVariantUpdate, ConversionRate, HighViewsLowSales,
-        MostViewedProduct, Order,
+        CableVariant, CableVariantRequest, CableVariantUpdate, CheckoutEventRow,
+        CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
+        HighViewsLowSales, MostViewedProduct, Order,
         OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, ProductSeo,
         ProductSeoRequest, TrendingProduct,
         UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
@@ -762,4 +763,153 @@ pub async fn get_top_product_ids(pool: &PgPool, limit: Option<i64>) -> Result<Ve
     }
     let rows: Vec<(String,)> = q.build_query_as().fetch_all(pool).await?;
     Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
+pub async fn get_checkout_sessions(
+    pool: &PgPool,
+    params: CheckoutSessionQuery,
+) -> Result<CheckoutSessionsResponse> {
+    let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+    let offset = params.offset.unwrap_or(0);
+
+    let mut qb = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "WITH sessions AS (
+            SELECT
+                session_id,
+                MAX(user_id) AS user_id,
+                BOOL_OR(COALESCE(is_guest, false)) AS is_guest,
+                BOOL_OR(type = 'purchase') AS purchased,
+                MAX(order_id) AS order_id,
+                MAX(step_index) AS last_step_index,
+                COUNT(*) AS event_count,
+                MIN(created_at) AS started_at,
+                MAX(created_at) AS last_activity_at,
+                COUNT(*) OVER() AS total_count
+            FROM checkout_analytics
+            GROUP BY session_id
+        )
+        SELECT * FROM sessions WHERE 1=1",
+    );
+
+    if let Some(session_id) = params.session_id {
+        qb.push(" AND session_id = ");
+        qb.push_bind(session_id);
+    }
+    if let Some(user_id) = params.user_id {
+        qb.push(" AND user_id = ");
+        qb.push_bind(user_id);
+    }
+    if let Some(ref step) = params.step {
+        qb.push(" AND session_id IN (SELECT session_id FROM checkout_analytics WHERE step = ");
+        qb.push_bind(step);
+        qb.push(")");
+    }
+    match params.outcome.as_deref() {
+        Some("completed") => {
+            qb.push(" AND purchased = true");
+        }
+        Some("abandoned") => {
+            qb.push(" AND purchased = false");
+        }
+        _ => {}
+    }
+
+    qb.push(" ORDER BY last_activity_at DESC LIMIT ");
+    qb.push_bind(limit);
+    qb.push(" OFFSET ");
+    qb.push_bind(offset);
+
+    #[derive(sqlx::FromRow)]
+    struct SessionRow {
+        session_id: uuid::Uuid,
+        user_id: Option<i32>,
+        is_guest: Option<bool>,
+        purchased: Option<bool>,
+        order_id: Option<String>,
+        last_step_index: Option<i32>,
+        event_count: i64,
+        started_at: chrono::DateTime<chrono::Utc>,
+        last_activity_at: chrono::DateTime<chrono::Utc>,
+        total_count: i64,
+    }
+
+    let rows = qb.build_query_as::<SessionRow>().fetch_all(pool).await?;
+    let total = rows.first().map(|r| r.total_count).unwrap_or(0);
+
+    let session_ids: Vec<uuid::Uuid> = rows.iter().map(|r| r.session_id).collect();
+
+    let events = sqlx::query_as::<_, CheckoutEventRow>(
+        "SELECT id, session_id, type, step, step_index, field, value, order_id,
+                is_guest, user_id, client_timestamp, created_at
+         FROM checkout_analytics
+         WHERE session_id = ANY($1)
+         ORDER BY created_at ASC",
+    )
+    .bind(&session_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let order_ids: Vec<String> = rows.iter().filter_map(|r| r.order_id.clone()).collect();
+    let order_statuses: Vec<(String, String)> = sqlx::query_as(
+        "SELECT order_id, status FROM orders WHERE order_id = ANY($1)",
+    )
+    .bind(&order_ids)
+    .fetch_all(pool)
+    .await?;
+    let status_map: std::collections::HashMap<String, String> =
+        order_statuses.into_iter().collect();
+
+    let mut events_map: std::collections::HashMap<uuid::Uuid, Vec<CheckoutEventRow>> =
+        std::collections::HashMap::new();
+    for event in events {
+        events_map.entry(event.session_id).or_default().push(event);
+    }
+
+    let sessions = rows
+        .into_iter()
+        .map(|r| {
+            let session_events = events_map.remove(&r.session_id).unwrap_or_default();
+
+            let mut fields = std::collections::HashMap::new();
+            let mut last_step = None;
+            let mut last_step_index = r.last_step_index;
+            for event in &session_events {
+                if let (Some(field), Some(value)) = (&event.field, &event.value) {
+                    fields.insert(field.clone(), value.clone());
+                }
+                if event.step_index >= last_step_index {
+                    last_step_index = event.step_index;
+                    last_step = event.step.clone();
+                }
+            }
+
+            let order_status = r
+                .order_id
+                .as_ref()
+                .and_then(|id| status_map.get(id).cloned());
+
+            CheckoutSessionSummary {
+                session_id: r.session_id,
+                user_id: r.user_id,
+                is_guest: r.is_guest,
+                last_step,
+                last_step_index,
+                purchased: r.purchased.unwrap_or(false),
+                order_id: r.order_id,
+                order_status,
+                event_count: r.event_count,
+                started_at: r.started_at,
+                last_activity_at: r.last_activity_at,
+                fields,
+                events: session_events,
+            }
+        })
+        .collect();
+
+    Ok(CheckoutSessionsResponse {
+        sessions,
+        total,
+        limit,
+        offset,
+    })
 }

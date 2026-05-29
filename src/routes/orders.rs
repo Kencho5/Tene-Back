@@ -13,12 +13,29 @@ use uuid::Uuid;
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{CableVariant, CheckoutRequest, CheckoutResponse, OrderItemData, OrderResponse},
+    models::{
+        CableVariant, CheckoutAnalyticsEvent, CheckoutRequest, CheckoutResponse, OrderItemData,
+        OrderResponse,
+    },
     queries::{admin_queries, order_queries, products_queries},
     services::{delivery_service, email_service, flitt_service},
     utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
+
+pub async fn track_checkout_analytics(
+    State(state): State<AppState>,
+    OptionalClaims(claims): OptionalClaims,
+    Json(event): Json<CheckoutAnalyticsEvent>,
+) -> StatusCode {
+    let user_id = claims.as_ref().and_then(|c| extract_user_id(c).ok());
+
+    if let Err(e) = order_queries::insert_checkout_event(&state.db, &event, user_id).await {
+        tracing::warn!("failed to store checkout analytics event: {e}");
+    }
+
+    StatusCode::NO_CONTENT
+}
 
 pub async fn checkout(
     State(state): State<AppState>,

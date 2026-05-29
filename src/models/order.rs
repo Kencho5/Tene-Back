@@ -1,6 +1,74 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CheckoutAnalyticsEvent {
+    pub session_id: Uuid,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub step: Option<String>,
+    pub step_index: Option<i32>,
+    pub field: Option<String>,
+    pub value: Option<String>,
+    pub order_id: Option<String>,
+    pub is_guest: Option<bool>,
+    pub timestamp: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CheckoutSessionQuery {
+    pub session_id: Option<Uuid>,
+    pub user_id: Option<i32>,
+    pub step: Option<String>,
+    pub outcome: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct CheckoutEventRow {
+    pub id: i64,
+    pub session_id: Uuid,
+    #[serde(rename = "type")]
+    #[sqlx(rename = "type")]
+    pub event_type: String,
+    pub step: Option<String>,
+    pub step_index: Option<i32>,
+    pub field: Option<String>,
+    pub value: Option<String>,
+    pub order_id: Option<String>,
+    pub is_guest: Option<bool>,
+    pub user_id: Option<i32>,
+    pub client_timestamp: Option<i64>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckoutSessionSummary {
+    pub session_id: Uuid,
+    pub user_id: Option<i32>,
+    pub is_guest: Option<bool>,
+    pub last_step: Option<String>,
+    pub last_step_index: Option<i32>,
+    pub purchased: bool,
+    pub order_id: Option<String>,
+    pub order_status: Option<String>,
+    pub event_count: i64,
+    pub started_at: DateTime<Utc>,
+    pub last_activity_at: DateTime<Utc>,
+    pub fields: std::collections::HashMap<String, String>,
+    pub events: Vec<CheckoutEventRow>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CheckoutSessionsResponse {
+    pub sessions: Vec<CheckoutSessionSummary>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Order {

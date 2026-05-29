@@ -1106,6 +1106,14 @@ pub async fn get_analytics(
     Ok(Json(analytics))
 }
 
+pub async fn get_checkout_sessions(
+    State(state): State<AppState>,
+    Query(params): Query<CheckoutSessionQuery>,
+) -> Result<Json<CheckoutSessionsResponse>> {
+    let sessions = admin_queries::get_checkout_sessions(&state.db, params).await?;
+    Ok(Json(sessions))
+}
+
 // top products
 pub async fn get_top_products_admin(
     State(state): State<AppState>,

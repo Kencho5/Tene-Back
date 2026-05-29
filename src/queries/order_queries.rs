@@ -273,3 +273,29 @@ pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result
 }
 
 
+
+pub async fn insert_checkout_event(
+    pool: &PgPool,
+    event: &crate::models::CheckoutAnalyticsEvent,
+    user_id: Option<i32>,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO checkout_analytics
+            (session_id, type, step, step_index, field, value, order_id, is_guest, user_id, client_timestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+    )
+    .bind(event.session_id)
+    .bind(&event.event_type)
+    .bind(&event.step)
+    .bind(event.step_index)
+    .bind(&event.field)
+    .bind(&event.value)
+    .bind(&event.order_id)
+    .bind(event.is_guest)
+    .bind(user_id)
+    .bind(event.timestamp)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}

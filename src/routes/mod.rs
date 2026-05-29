@@ -93,6 +93,10 @@ fn checkout_routes() -> Router<AppState> {
 
     Router::new()
         .route("/checkout", post(orders::checkout))
+        .route(
+            "/checkout/analytics",
+            post(orders::track_checkout_analytics),
+        )
         .route("/orders/{id}", get(orders::get_order))
         .merge(authed)
 }
@@ -182,6 +186,10 @@ fn admin_routes() -> Router<AppState> {
         )
         // analytics
         .route("/admin/analytics", get(admin::get_analytics))
+        .route(
+            "/admin/checkout-sessions",
+            get(admin::get_checkout_sessions),
+        )
         // top products
         .route("/admin/top-products", get(admin::get_top_products_admin))
         .route("/admin/top-products", put(admin::replace_top_products))
