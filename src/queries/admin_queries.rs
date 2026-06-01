@@ -4,7 +4,7 @@ use crate::{
     error::Result,
     models::{
         AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
-        CableVariant, CableVariantRequest, CableVariantUpdate, CheckoutEventRow,
+        CableVariant, CableVariantRequest, CableVariantUpdate, CartSnapshotItem, CheckoutEventRow,
         CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
         HighViewsLowSales, MostViewedProduct, Order,
         OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, ProductSeo,
@@ -859,6 +859,20 @@ pub async fn get_checkout_sessions(
     let status_map: std::collections::HashMap<String, String> =
         order_statuses.into_iter().collect();
 
+    let carts: Vec<(uuid::Uuid, serde_json::Value)> = sqlx::query_as(
+        "SELECT session_id, cart FROM checkout_cart_snapshots WHERE session_id = ANY($1)",
+    )
+    .bind(&session_ids)
+    .fetch_all(pool)
+    .await?;
+    let mut cart_map: std::collections::HashMap<uuid::Uuid, Vec<CartSnapshotItem>> =
+        std::collections::HashMap::new();
+    for (sid, cart_json) in carts {
+        if let Ok(items) = serde_json::from_value::<Vec<CartSnapshotItem>>(cart_json) {
+            cart_map.insert(sid, items);
+        }
+    }
+
     let mut events_map: std::collections::HashMap<uuid::Uuid, Vec<CheckoutEventRow>> =
         std::collections::HashMap::new();
     for event in events {
@@ -901,6 +915,7 @@ pub async fn get_checkout_sessions(
                 started_at: r.started_at,
                 last_activity_at: r.last_activity_at,
                 fields,
+                cart: cart_map.remove(&r.session_id),
                 events: session_events,
             }
         })

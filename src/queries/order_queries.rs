@@ -297,5 +297,20 @@ pub async fn insert_checkout_event(
     .execute(pool)
     .await?;
 
+    if let Some(cart) = &event.cart {
+        let cart_json = serde_json::to_value(cart)
+            .map_err(|e| crate::error::AppError::InternalError(e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO checkout_cart_snapshots (session_id, cart, updated_at)
+             VALUES ($1, $2, NOW())
+             ON CONFLICT (session_id)
+             DO UPDATE SET cart = EXCLUDED.cart, updated_at = NOW()",
+        )
+        .bind(event.session_id)
+        .bind(&cart_json)
+        .execute(pool)
+        .await?;
+    }
+
     Ok(())
 }

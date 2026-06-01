@@ -15,6 +15,18 @@ pub struct CheckoutAnalyticsEvent {
     pub order_id: Option<String>,
     pub is_guest: Option<bool>,
     pub timestamp: Option<i64>,
+    pub cart: Option<Vec<CartSnapshotItem>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CartSnapshotItem {
+    pub product_id: String,
+    pub quantity: i32,
+    pub color: Option<String>,
+    pub cable_config: Option<CableConfig>,
+    pub name: Option<String>,
+    pub image_uuid: Option<String>,
+    pub image_extension: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,6 +71,7 @@ pub struct CheckoutSessionSummary {
     pub started_at: DateTime<Utc>,
     pub last_activity_at: DateTime<Utc>,
     pub fields: std::collections::HashMap<String, String>,
+    pub cart: Option<Vec<CartSnapshotItem>>,
     pub events: Vec<CheckoutEventRow>,
 }
 
