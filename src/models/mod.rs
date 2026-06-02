@@ -1,4 +1,5 @@
 mod admin;
+mod blog;
 mod category;
 mod email;
 mod order;
@@ -7,6 +8,7 @@ mod task;
 mod user;
 
 pub use admin::*;
+pub use blog::*;
 pub use category::*;
 pub use email::*;
 pub use order::*;

@@ -1,4 +1,5 @@
 mod admin;
+mod blogs;
 mod categories;
 mod google_auth;
 mod health;
@@ -27,6 +28,7 @@ pub fn create_router() -> Router<AppState> {
         .nest("/auth", auth_routes())
         .merge(products_routes())
         .merge(categories_routes())
+        .merge(blogs_routes())
         .merge(user_routes())
         .merge(checkout_routes())
         .route("/payments/callback", post(orders::flitt_callback))
@@ -66,6 +68,12 @@ fn products_routes() -> Router<AppState> {
             "/cable-types/{id}/variants",
             get(products::get_cable_variants),
         )
+}
+
+fn blogs_routes() -> Router<AppState> {
+    Router::new()
+        .route("/blogs", get(blogs::list_public_blogs))
+        .route("/blogs/{slug}", get(blogs::get_public_blog))
 }
 
 fn categories_routes() -> Router<AppState> {
@@ -183,6 +191,24 @@ fn admin_routes() -> Router<AppState> {
         .route(
             "/admin/tasks/{id}/media/{media_uuid}",
             delete(tasks::delete_task_media),
+        )
+        // blogs
+        .route("/admin/blogs", get(blogs::search_blogs))
+        .route("/admin/blogs", post(blogs::create_blog))
+        .route("/admin/blogs/{id}", get(blogs::get_blog))
+        .route("/admin/blogs/{id}", put(blogs::update_blog))
+        .route("/admin/blogs/{id}", delete(blogs::delete_blog))
+        .route(
+            "/admin/blogs/{id}/media",
+            put(blogs::generate_blog_media_urls),
+        )
+        .route(
+            "/admin/blogs/{id}/media/{media_uuid}",
+            delete(blogs::delete_blog_media),
+        )
+        .route(
+            "/admin/blogs/{id}/media/{media_uuid}/thumbnail",
+            patch(blogs::set_blog_media_thumbnail),
         )
         // analytics
         .route("/admin/analytics", get(admin::get_analytics))
