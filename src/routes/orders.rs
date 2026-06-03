@@ -14,11 +14,12 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        CableVariant, CheckoutAnalyticsEvent, CheckoutRequest, CheckoutResponse, OrderItemData,
-        OrderResponse,
+        CableVariant, CheckoutAnalyticsEvent, CheckoutRequest, CheckoutResponse, CommentImage,
+        CommentImageUploadUrl, CommentImageUrlRequest, CommentImageUrlResponse, OrderCommentImage,
+        OrderItemData, OrderResponse,
     },
     queries::{admin_queries, order_queries, products_queries},
-    services::{delivery_service, email_service, flitt_service},
+    services::{delivery_service, email_service, flitt_service, image_url_service},
     utils::extractors::{OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
@@ -35,6 +36,77 @@ pub async fn track_checkout_analytics(
     }
 
     StatusCode::NO_CONTENT
+}
+
+const MAX_COMMENT_IMAGES: usize = 5;
+
+fn comment_image_extension(content_type: &str) -> Result<&'static str> {
+    match content_type {
+        "image/jpeg" | "image/jpg" => Ok("jpg"),
+        "image/png" => Ok("png"),
+        "image/webp" => Ok("webp"),
+        "image/gif" => Ok("gif"),
+        _ => Err(AppError::BadRequest(format!(
+            "სურათის ფორმატი არ არის დაშვებული: {content_type}"
+        ))),
+    }
+}
+
+fn comment_images_prefix(state: &AppState) -> &'static str {
+    match state.environment {
+        crate::config::Environment::Staging => "order-comments-staging",
+        crate::config::Environment::Main => "order-comments-main",
+    }
+}
+
+pub async fn generate_comment_image_urls(
+    State(state): State<AppState>,
+    Json(payload): Json<CommentImageUrlRequest>,
+) -> Result<Json<CommentImageUrlResponse>> {
+    if payload.images.is_empty() {
+        return Err(AppError::BadRequest("სურათები არ არის მითითებული".to_string()));
+    }
+    if payload.images.len() > MAX_COMMENT_IMAGES {
+        return Err(AppError::BadRequest(format!(
+            "მაქსიმუმ {MAX_COMMENT_IMAGES} სურათია დაშვებული"
+        )));
+    }
+
+    let env_prefix = comment_images_prefix(&state);
+    let mut images = Vec::with_capacity(payload.images.len());
+
+    for req in &payload.images {
+        let extension = comment_image_extension(&req.content_type)?;
+        let image_uuid = Uuid::new_v4();
+        let key = format!("{env_prefix}/{image_uuid}.{extension}");
+
+        let upload_url = image_url_service::put_object_url(
+            &state.s3_client,
+            &state.s3_bucket,
+            &key,
+            &req.content_type,
+            "public, max-age=31536000, immutable",
+            900,
+        )
+        .await
+        .map_err(|e| {
+            AppError::InternalError(format!(
+                "წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {e}"
+            ))
+        })?;
+
+        let public_url = format!("{}/{}", state.assets_url, key);
+
+        order_queries::add_comment_image(&state.db, image_uuid, extension).await?;
+
+        images.push(CommentImageUploadUrl {
+            image_uuid,
+            upload_url,
+            public_url,
+        });
+    }
+
+    Ok(Json(CommentImageUrlResponse { images }))
 }
 
 pub async fn checkout(
@@ -67,7 +139,7 @@ pub async fn checkout(
 
     let order_id = format!("tene_{}", Uuid::new_v4());
 
-    order_queries::create_order_with_items(
+    let order = order_queries::create_order_with_items(
         &state.db,
         user_id,
         &order_id,
@@ -76,6 +148,15 @@ pub async fn checkout(
         &order_items,
     )
     .await?;
+
+    if !payload.comment_image_uuids.is_empty() {
+        order_queries::attach_comment_images(
+            &state.db,
+            order.id,
+            &payload.comment_image_uuids,
+        )
+        .await?;
+    }
 
     let server_callback_url = format!("{}/payments/callback", state.backend_url);
     let response_url = format!("{}/payments/redirect", state.backend_url);
@@ -106,6 +187,12 @@ fn validate_checkout_request(payload: &CheckoutRequest) -> Result<()> {
 
     if payload.email.is_empty() || !payload.email.contains('@') {
         return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
+    }
+
+    if payload.comment_image_uuids.len() > MAX_COMMENT_IMAGES {
+        return Err(AppError::BadRequest(format!(
+            "მაქსიმუმ {MAX_COMMENT_IMAGES} სურათია დაშვებული"
+        )));
     }
 
     if payload.delivery_type != "pickup" {
@@ -409,8 +496,31 @@ pub async fn get_order(
     }
 
     let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
+    let comment_image_rows =
+        order_queries::get_comment_images_for_orders(&state.db, &[order.id]).await?;
+    let comment_images = build_comment_images(&state, comment_image_rows);
 
-    Ok(Json(OrderResponse { order, items }))
+    Ok(Json(OrderResponse {
+        order,
+        items,
+        comment_images,
+    }))
+}
+
+pub(crate) fn build_comment_images(
+    state: &AppState,
+    rows: Vec<OrderCommentImage>,
+) -> Vec<CommentImage> {
+    let env_prefix = comment_images_prefix(state);
+    rows.into_iter()
+        .map(|img| CommentImage {
+            url: format!(
+                "{}/{}/{}.{}",
+                state.assets_url, env_prefix, img.image_uuid, img.extension
+            ),
+            image_uuid: img.image_uuid,
+        })
+        .collect()
 }
 
 pub async fn get_orders(
@@ -422,17 +532,32 @@ pub async fn get_orders(
 
     let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
     let all_items = order_queries::get_items_for_orders(&state.db, &order_db_ids).await?;
+    let all_comment_images =
+        order_queries::get_comment_images_for_orders(&state.db, &order_db_ids).await?;
 
     let mut items_map: HashMap<i32, Vec<_>> = HashMap::new();
     for item in all_items {
         items_map.entry(item.order_id).or_default().push(item);
     }
 
+    let mut comment_images_map: HashMap<i32, Vec<OrderCommentImage>> = HashMap::new();
+    for img in all_comment_images {
+        if let Some(oid) = img.order_id {
+            comment_images_map.entry(oid).or_default().push(img);
+        }
+    }
+
     let response = orders
         .into_iter()
         .map(|order| {
             let items = items_map.remove(&order.id).unwrap_or_default();
-            OrderResponse { order, items }
+            let comment_images =
+                build_comment_images(&state, comment_images_map.remove(&order.id).unwrap_or_default());
+            OrderResponse {
+                order,
+                items,
+                comment_images,
+            }
         })
         .collect();
 

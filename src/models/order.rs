@@ -132,11 +132,50 @@ pub struct CableConfig {
     pub length_cm: i32,
 }
 
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct OrderCommentImage {
+    pub id: i32,
+    pub order_id: Option<i32>,
+    pub image_uuid: Uuid,
+    pub extension: String,
+    pub position: i32,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct OrderResponse {
     #[serde(flatten)]
     pub order: Order,
     pub items: Vec<OrderItem>,
+    pub comment_images: Vec<CommentImage>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CommentImage {
+    pub image_uuid: Uuid,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CommentImageUploadRequest {
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CommentImageUrlRequest {
+    pub images: Vec<CommentImageUploadRequest>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CommentImageUploadUrl {
+    pub image_uuid: Uuid,
+    pub upload_url: String,
+    pub public_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CommentImageUrlResponse {
+    pub images: Vec<CommentImageUploadUrl>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -174,6 +213,8 @@ pub struct CheckoutRequest {
     pub delivery_time: String,
     pub comment: Option<String>,
     pub items: Vec<CartItem>,
+    #[serde(default)]
+    pub comment_image_uuids: Vec<Uuid>,
 }
 
 pub struct OrderItemData {

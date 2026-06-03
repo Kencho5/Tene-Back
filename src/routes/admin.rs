@@ -993,7 +993,26 @@ pub async fn get_orders(
     State(state): State<AppState>,
     Query(params): Query<OrderQuery>,
 ) -> Result<Json<OrderSearchResponse>> {
-    let response = admin_queries::get_orders(&state.db, params).await?;
+    let mut response = admin_queries::get_orders(&state.db, params).await?;
+
+    let order_db_ids: Vec<i32> = response.orders.iter().map(|o| o.order.id).collect();
+    let all_comment_images =
+        order_queries::get_comment_images_for_orders(&state.db, &order_db_ids).await?;
+
+    let mut images_map: std::collections::HashMap<i32, Vec<_>> = std::collections::HashMap::new();
+    for img in all_comment_images {
+        if let Some(oid) = img.order_id {
+            images_map.entry(oid).or_default().push(img);
+        }
+    }
+
+    for order in &mut response.orders {
+        order.comment_images = super::orders::build_comment_images(
+            &state,
+            images_map.remove(&order.order.id).unwrap_or_default(),
+        );
+    }
+
     Ok(Json(response))
 }
 

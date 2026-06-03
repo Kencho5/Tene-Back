@@ -3,9 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     error::Result,
-    models::{
-        Blog, BlogMedia, BlogMediaType, BlogQuery, CreateBlogRequest, UpdateBlogRequest,
-    },
+    models::{Blog, BlogMedia, BlogMediaType, BlogQuery, CreateBlogRequest, UpdateBlogRequest},
 };
 
 const DEFAULT_PAGE_SIZE: i64 = 20;
@@ -43,12 +41,11 @@ pub async fn find_by_id(pool: &PgPool, id: i32) -> Result<Option<Blog>> {
 }
 
 pub async fn find_published_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Blog>> {
-    let blog = sqlx::query_as::<_, Blog>(
-        "SELECT * FROM blogs WHERE slug = $1 AND status = 'published'",
-    )
-    .bind(slug)
-    .fetch_optional(pool)
-    .await?;
+    let blog =
+        sqlx::query_as::<_, Blog>("SELECT * FROM blogs WHERE slug = $1 AND status = 'published'")
+            .bind(slug)
+            .fetch_optional(pool)
+            .await?;
     Ok(blog)
 }
 
@@ -185,10 +182,12 @@ pub async fn add_blog_media(
     let mut tx = pool.begin().await?;
 
     if is_thumbnail {
-        sqlx::query("UPDATE blog_media SET is_thumbnail = FALSE WHERE blog_id = $1 AND is_thumbnail")
-            .bind(blog_id)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "UPDATE blog_media SET is_thumbnail = FALSE WHERE blog_id = $1 AND is_thumbnail",
+        )
+        .bind(blog_id)
+        .execute(&mut *tx)
+        .await?;
     }
 
     let media = sqlx::query_as::<_, BlogMedia>(

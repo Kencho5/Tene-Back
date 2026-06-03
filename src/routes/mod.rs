@@ -102,6 +102,10 @@ fn checkout_routes() -> Router<AppState> {
     Router::new()
         .route("/checkout", post(orders::checkout))
         .route(
+            "/checkout/comment-images",
+            put(orders::generate_comment_image_urls),
+        )
+        .route(
             "/checkout/analytics",
             post(orders::track_checkout_analytics),
         )

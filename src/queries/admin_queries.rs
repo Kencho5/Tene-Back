@@ -366,7 +366,11 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         .into_iter()
         .map(|order| {
             let items = items_map.remove(&order.id).unwrap_or_default();
-            crate::models::OrderResponse { order, items }
+            crate::models::OrderResponse {
+                order,
+                items,
+                comment_images: Vec::new(),
+            }
         })
         .collect();
 

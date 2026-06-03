@@ -3,8 +3,11 @@ use sqlx::PgPool;
 
 use crate::{
     error::Result,
-    models::{CheckoutRequest, CustomerInfo, Order, OrderItem, OrderItemData},
+    models::{
+        CheckoutRequest, CustomerInfo, Order, OrderCommentImage, OrderItem, OrderItemData,
+    },
 };
+use uuid::Uuid;
 
 pub struct OrderContact<'a> {
     pub customer: &'a CustomerInfo,
@@ -272,7 +275,49 @@ pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result
     Ok(items)
 }
 
+pub async fn add_comment_image(pool: &PgPool, image_uuid: Uuid, extension: &str) -> Result<()> {
+    sqlx::query("INSERT INTO order_comment_images (image_uuid, extension) VALUES ($1, $2)")
+        .bind(image_uuid)
+        .bind(extension)
+        .execute(pool)
+        .await?;
 
+    Ok(())
+}
+
+pub async fn attach_comment_images(
+    pool: &PgPool,
+    order_id: i32,
+    image_uuids: &[Uuid],
+) -> Result<()> {
+    sqlx::query(
+        "UPDATE order_comment_images
+         SET order_id = $1, position = data.position
+         FROM (SELECT unnest($2::uuid[]) AS image_uuid, generate_subscripts($2::uuid[], 1) - 1 AS position) AS data
+         WHERE order_comment_images.image_uuid = data.image_uuid
+           AND order_comment_images.order_id IS NULL",
+    )
+    .bind(order_id)
+    .bind(image_uuids)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_comment_images_for_orders(
+    pool: &PgPool,
+    order_db_ids: &[i32],
+) -> Result<Vec<OrderCommentImage>> {
+    let images = sqlx::query_as::<_, OrderCommentImage>(
+        "SELECT * FROM order_comment_images WHERE order_id = ANY($1) ORDER BY position, id",
+    )
+    .bind(order_db_ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(images)
+}
 
 pub async fn insert_checkout_event(
     pool: &PgPool,
