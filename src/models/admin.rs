@@ -150,6 +150,7 @@ pub struct CableTypeWithVariants {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrderQuery {
     pub id: Option<i32>,
+    pub search: Option<String>,
     pub user_id: Option<i32>,
     pub status: Option<String>,
     pub limit: Option<i64>,

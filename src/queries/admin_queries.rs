@@ -322,6 +322,21 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(id);
     }
 
+    if let Some(search) = params.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        query_builder.push(" AND (");
+        if let Ok(search_id) = search.parse::<i32>() {
+            query_builder.push("id = ");
+            query_builder.push_bind(search_id);
+            query_builder.push(" OR ");
+        }
+        let pattern = format!("%{}%", search);
+        query_builder.push("customer_name ILIKE ");
+        query_builder.push_bind(pattern.clone());
+        query_builder.push(" OR customer_surname ILIKE ");
+        query_builder.push_bind(pattern);
+        query_builder.push(")");
+    }
+
     if let Some(user_id) = params.user_id {
         query_builder.push(" AND user_id = ");
         query_builder.push_bind(user_id);
