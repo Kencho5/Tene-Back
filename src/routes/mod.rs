@@ -235,6 +235,10 @@ fn operator_routes() -> Router<AppState> {
         .route("/admin/orders", get(admin::get_orders))
         .route("/admin/orders/export", get(admin::export_orders))
         .route(
+            "/admin/orders/{id}/status",
+            patch(admin::update_order_status),
+        )
+        .route(
             "/admin/orders/payment-link",
             post(admin::create_payment_link),
         )

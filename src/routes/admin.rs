@@ -1048,6 +1048,23 @@ pub async fn get_orders(
     Ok(Json(response))
 }
 
+pub async fn update_order_status(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<OrderStatusUpdate>,
+) -> Result<Json<Order>> {
+    let status = payload.status.trim();
+    if status.is_empty() {
+        return Err(AppError::BadRequest("სტატუსი აუცილებელია".to_string()));
+    }
+
+    let order = admin_queries::update_order_status(&state.db, id, status)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
+
+    Ok(Json(order))
+}
+
 pub async fn export_orders(
     State(state): State<AppState>,
     Query(mut params): Query<OrderQuery>,

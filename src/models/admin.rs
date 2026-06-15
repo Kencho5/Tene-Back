@@ -147,6 +147,11 @@ pub struct CableTypeWithVariants {
     pub variants: Vec<CableVariant>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct OrderStatusUpdate {
+    pub status: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OrderQuery {
     pub id: Option<i32>,

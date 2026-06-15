@@ -309,6 +309,21 @@ pub async fn delete_user(pool: &PgPool, id: i32) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
+pub async fn update_order_status(
+    pool: &PgPool,
+    id: i32,
+    status: &str,
+) -> Result<Option<Order>> {
+    let order = sqlx::query_as::<_, Order>(
+        "UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    )
+    .bind(status)
+    .bind(id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(order)
+}
+
 pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearchResponse> {
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
