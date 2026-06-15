@@ -153,6 +153,8 @@ pub struct OrderQuery {
     pub search: Option<String>,
     pub user_id: Option<i32>,
     pub status: Option<String>,
+    pub from_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub to_date: Option<chrono::DateTime<chrono::Utc>>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }
@@ -161,6 +163,7 @@ pub struct OrderQuery {
 pub struct OrderSearchResponse {
     pub orders: Vec<crate::models::OrderResponse>,
     pub total: i64,
+    pub total_amount: i64,
     pub limit: i64,
     pub offset: i64,
 }

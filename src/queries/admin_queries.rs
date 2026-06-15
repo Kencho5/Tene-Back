@@ -314,7 +314,8 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
     let offset = params.offset.unwrap_or(0);
 
     let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-        "SELECT *, COUNT(*) OVER() as total_count FROM orders WHERE 1=1",
+        "SELECT *, COUNT(*) OVER() as total_count, \
+         COALESCE(SUM(amount) OVER(), 0) as total_amount FROM orders WHERE 1=1",
     );
 
     if let Some(id) = params.id {
@@ -347,6 +348,16 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(status);
     }
 
+    if let Some(from_date) = params.from_date {
+        query_builder.push(" AND created_at >= ");
+        query_builder.push_bind(from_date);
+    }
+
+    if let Some(to_date) = params.to_date {
+        query_builder.push(" AND created_at <= ");
+        query_builder.push_bind(to_date);
+    }
+
     query_builder.push(" ORDER BY created_at DESC");
     query_builder.push(" LIMIT ");
     query_builder.push_bind(limit);
@@ -358,6 +369,7 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         #[sqlx(flatten)]
         order: Order,
         total_count: i64,
+        total_amount: i64,
     }
 
     let results = query_builder
@@ -366,6 +378,7 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         .await?;
 
     let total = results.first().map(|r| r.total_count).unwrap_or(0);
+    let total_amount = results.first().map(|r| r.total_amount).unwrap_or(0);
     let orders: Vec<Order> = results.into_iter().map(|r| r.order).collect();
 
     let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
@@ -392,6 +405,7 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
     Ok(OrderSearchResponse {
         orders,
         total,
+        total_amount,
         limit,
         offset,
     })
