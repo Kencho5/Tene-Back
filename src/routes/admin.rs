@@ -87,8 +87,7 @@ pub async fn create_product(
 
     if let Some(ref seo) = payload.seo {
         if let Some(ref slug) = seo.slug {
-            if let Some(other_id) =
-                admin_queries::find_product_seo_by_slug(&state.db, slug).await?
+            if let Some(other_id) = admin_queries::find_product_seo_by_slug(&state.db, slug).await?
             {
                 if &other_id != id {
                     return Err(AppError::Conflict(format!(
@@ -124,17 +123,17 @@ pub async fn update_product(
     Path(id): Path<String>,
     Json(mut payload): Json<ProductRequest>,
 ) -> Result<Json<ProductResponse>> {
-    let existing = products_queries::find_by_id(&state.db, &id).await?.ok_or_else(|| {
-        AppError::NotFound(format!("პროდუქტი id-ით {} ვერ მოიძებნა", id))
-    })?;
+    let existing = products_queries::find_by_id(&state.db, &id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("პროდუქტი id-ით {} ვერ მოიძებნა", id)))?;
 
     let effective_price = payload.price.or(Some(existing.price));
-    payload.discount = resolve_discount(effective_price, payload.discount, payload.discounted_price)?;
+    payload.discount =
+        resolve_discount(effective_price, payload.discount, payload.discounted_price)?;
 
     if let Some(ref seo) = payload.seo {
         if let Some(ref slug) = seo.slug {
-            if let Some(other_id) =
-                admin_queries::find_product_seo_by_slug(&state.db, slug).await?
+            if let Some(other_id) = admin_queries::find_product_seo_by_slug(&state.db, slug).await?
             {
                 if other_id != id {
                     return Err(AppError::Conflict(format!(
@@ -169,7 +168,10 @@ pub async fn delete_product(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<StatusCode> {
-    if products_queries::find_by_id(&state.db, &id).await?.is_none() {
+    if products_queries::find_by_id(&state.db, &id)
+        .await?
+        .is_none()
+    {
         return Err(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()));
     }
 
@@ -182,7 +184,9 @@ pub async fn delete_product(
 
     delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &s3_prefix)
         .await
-        .map_err(|e| AppError::InternalError(format!("S3-დან სურათების წაშლა ვერ მოხერხდა: {}", e)))?;
+        .map_err(|e| {
+            AppError::InternalError(format!("S3-დან სურათების წაშლა ვერ მოხერხდა: {}", e))
+        })?;
 
     admin_queries::delete_product(&state.db, &id).await?;
 
@@ -220,7 +224,12 @@ pub async fn generate_product_urls(
             900,
         )
         .await
-        .map_err(|e| AppError::InternalError(format!("წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {}", e)))?;
+        .map_err(|e| {
+            AppError::InternalError(format!(
+                "წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {}",
+                e
+            ))
+        })?;
 
         let public_url = format!("{}/{}", state.assets_url, key);
 
@@ -270,7 +279,9 @@ pub async fn delete_product_image(
 
     delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
-        .map_err(|e| AppError::InternalError(format!("S3-დან სურათის წაშლა ვერ მოხერხდა: {}", e)))?;
+        .map_err(|e| {
+            AppError::InternalError(format!("S3-დან სურათის წაშლა ვერ მოხერხდა: {}", e))
+        })?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -330,7 +341,10 @@ pub async fn update_user(
     Json(payload): Json<UserRequest>,
 ) -> Result<Json<UserResponse>> {
     if user_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("მომხმარებელი id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "მომხმარებელი id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     let user = admin_queries::update_user(&state.db, id, &payload).await?;
@@ -340,7 +354,10 @@ pub async fn update_user(
 
 pub async fn delete_user(State(state): State<AppState>, Path(id): Path<i32>) -> Result<StatusCode> {
     if user_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("მომხმარებელი id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "მომხმარებელი id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     admin_queries::delete_user(&state.db, id).await?;
@@ -630,7 +647,9 @@ pub async fn generate_category_image_url(
         );
         delete_single_object(&state.s3_client, &state.s3_bucket, &old_key)
             .await
-            .map_err(|e| AppError::InternalError(format!("S3-დან ძველი სურათის წაშლა ვერ მოხერხდა: {}", e)))?;
+            .map_err(|e| {
+                AppError::InternalError(format!("S3-დან ძველი სურათის წაშლა ვერ მოხერხდა: {}", e))
+            })?;
     }
 
     let key = format!("{}/{}/{}.{}", env_prefix, id, image_uuid, extension);
@@ -644,7 +663,12 @@ pub async fn generate_category_image_url(
         900,
     )
     .await
-    .map_err(|e| AppError::InternalError(format!("წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {}", e)))?;
+    .map_err(|e| {
+        AppError::InternalError(format!(
+            "წინასწარ ხელმოწერილი URL-ის გენერაცია ვერ მოხერხდა: {}",
+            e
+        ))
+    })?;
 
     let public_url = format!("{}/{}", state.assets_url, key);
 
@@ -670,10 +694,14 @@ pub async fn delete_category_image(
 
     let image = category_queries::get_category_image(&state.db, id)
         .await?
-        .ok_or(AppError::NotFound("კატეგორიის სურათი ვერ მოიძებნა".to_string()))?;
+        .ok_or(AppError::NotFound(
+            "კატეგორიის სურათი ვერ მოიძებნა".to_string(),
+        ))?;
 
     if image.image_uuid != image_uuid {
-        return Err(AppError::NotFound("კატეგორიის სურათი ვერ მოიძებნა".to_string()));
+        return Err(AppError::NotFound(
+            "კატეგორიის სურათი ვერ მოიძებნა".to_string(),
+        ));
     }
 
     let env_prefix = match state.environment {
@@ -685,7 +713,9 @@ pub async fn delete_category_image(
 
     delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
-        .map_err(|e| AppError::InternalError(format!("S3-დან სურათის წაშლა ვერ მოხერხდა: {}", e)))?;
+        .map_err(|e| {
+            AppError::InternalError(format!("S3-დან სურათის წაშლა ვერ მოხერხდა: {}", e))
+        })?;
 
     category_queries::delete_category_image(&state.db, id, image_uuid).await?;
 
@@ -725,7 +755,10 @@ pub async fn update_brand(
         .await?
         .is_none()
     {
-        return Err(AppError::NotFound(format!("ბრენდი id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "ბრენდი id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     if let Some(existing) = admin_queries::find_brand_by_name(&state.db, &payload.name).await? {
@@ -749,7 +782,10 @@ pub async fn delete_brand(
         .await?
         .is_none()
     {
-        return Err(AppError::NotFound(format!("ბრენდი id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "ბრენდი id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     admin_queries::delete_brand(&state.db, id).await?;
@@ -912,9 +948,7 @@ pub async fn update_cable_variant(
 ) -> Result<Json<CableVariant>> {
     let existing = admin_queries::find_cable_variant_by_id(&state.db, variant_id)
         .await?
-        .ok_or_else(|| {
-            AppError::NotFound(format!("ვარიაცია id-ით {} ვერ მოიძებნა", variant_id))
-        })?;
+        .ok_or_else(|| AppError::NotFound(format!("ვარიაცია id-ით {} ვერ მოიძებნა", variant_id)))?;
 
     if existing.cable_type_id != type_id {
         return Err(AppError::NotFound(
@@ -975,9 +1009,7 @@ pub async fn delete_cable_variant(
 ) -> Result<StatusCode> {
     let existing = admin_queries::find_cable_variant_by_id(&state.db, variant_id)
         .await?
-        .ok_or_else(|| {
-            AppError::NotFound(format!("ვარიაცია id-ით {} ვერ მოიძებნა", variant_id))
-        })?;
+        .ok_or_else(|| AppError::NotFound(format!("ვარიაცია id-ით {} ვერ მოიძებნა", variant_id)))?;
 
     if existing.cable_type_id != type_id {
         return Err(AppError::NotFound(
@@ -1014,6 +1046,115 @@ pub async fn get_orders(
     }
 
     Ok(Json(response))
+}
+
+pub async fn export_orders(
+    State(state): State<AppState>,
+    Query(mut params): Query<OrderQuery>,
+) -> Result<axum::response::Response> {
+    use axum::response::IntoResponse;
+    use rust_xlsxwriter::{Format, Workbook};
+
+    params.limit = Some(i64::MAX);
+    params.offset = Some(0);
+
+    let response = admin_queries::get_orders(&state.db, params).await?;
+
+    let mut workbook = Workbook::new();
+    let sheet = workbook.add_worksheet();
+
+    let header = Format::new().set_bold();
+    let headers = [
+        "ID",
+        "შეკვეთის ნომერი",
+        "სტატუსი",
+        "თანხა (₾)",
+        "ვალუტა",
+        "მომხმარებელი",
+        "ელფოსტა",
+        "ტელეფონი",
+        "მისამართი",
+        "ქალაქი",
+        "მიწოდების ტიპი",
+        "მიწოდების დრო",
+        "კომენტარი",
+        "პროდუქტები",
+        "შექმნის თარიღი",
+    ];
+    for (col, title) in headers.iter().enumerate() {
+        sheet
+            .write_string_with_format(0, col as u16, *title, &header)
+            .map_err(|e| {
+                AppError::InternalError(format!("excel-ის გენერაცია ვერ მოხერხდა: {}", e))
+            })?;
+    }
+
+    for (i, o) in response.orders.iter().enumerate() {
+        let row = (i + 1) as u32;
+        let order = &o.order;
+
+        let customer = match (&order.customer_name, &order.customer_surname) {
+            (Some(n), Some(s)) => format!("{} {}", n, s),
+            (Some(n), None) => n.clone(),
+            (None, Some(s)) => s.clone(),
+            (None, None) => order.organization_name.clone().unwrap_or_default(),
+        };
+
+        let items = o
+            .items
+            .iter()
+            .map(|it| {
+                let color = it
+                    .color
+                    .as_deref()
+                    .map(|c| format!(" ({})", c))
+                    .unwrap_or_default();
+                format!("{}{} x{}", it.product_name, color, it.quantity)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let cells: [String; 15] = [
+            order.id.to_string(),
+            order.order_id.clone(),
+            order.status.clone(),
+            (Decimal::from(order.amount) / Decimal::from(100)).to_string(),
+            order.currency.clone(),
+            customer,
+            order.email.clone(),
+            order.phone_number.clone(),
+            order.address.clone(),
+            order.city.clone().unwrap_or_default(),
+            order.delivery_type.clone(),
+            order.delivery_time.clone(),
+            order.comment.clone().unwrap_or_default(),
+            items,
+            order.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
+        ];
+
+        for (col, value) in cells.iter().enumerate() {
+            sheet.write_string(row, col as u16, value).map_err(|e| {
+                AppError::InternalError(format!("excel-ის გენერაცია ვერ მოხერხდა: {}", e))
+            })?;
+        }
+    }
+
+    let buffer = workbook
+        .save_to_buffer()
+        .map_err(|e| AppError::InternalError(format!("excel-ის შენახვა ვერ მოხერხდა: {}", e)))?;
+
+    let headers = [
+        (
+            http::header::CONTENT_TYPE,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+        (
+            http::header::CONTENT_DISPOSITION,
+            "attachment; filename=\"orders.xlsx\"",
+        ),
+    ];
+
+    Ok((headers, buffer).into_response())
 }
 
 pub async fn create_payment_link(
@@ -1172,4 +1313,3 @@ pub async fn replace_top_products(
     admin_queries::replace_top_products(&state.db, &payload.product_ids).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-

@@ -29,6 +29,9 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chron
 chrono = { version = "0.4.39", features = ["serde"] }
 rust_decimal = { version = "1.39.0", features = ["macros"] }
 
+# Excel export
+rust_xlsxwriter = "0.95.0"
+
 # Authentication & Security
 bcrypt = "0.17.1"
 google-oauth = "1.11"
