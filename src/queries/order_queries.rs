@@ -15,6 +15,7 @@ pub struct OrderContact<'a> {
     pub phone_number: &'a str,
     pub address: &'a str,
     pub city: Option<&'a str>,
+    pub region: Option<&'a str>,
     pub details: Option<&'a str>,
     pub delivery_type: &'a str,
     pub delivery_time: &'a str,
@@ -35,6 +36,7 @@ pub async fn create_order_with_items(
         phone_number: &req.phone_number,
         address: &req.address,
         city: req.city.as_deref(),
+        region: req.region.as_deref(),
         details: req.details.as_deref(),
         delivery_type: &req.delivery_type,
         delivery_time: &req.delivery_time,
@@ -80,8 +82,8 @@ pub async fn create_order_with_items_raw(
     let order = sqlx::query_as::<_, Order>(
         "INSERT INTO orders (user_id, order_id, amount, customer_type, customer_name, customer_surname,
          organization_type, organization_name, organization_code, email, phone_number, address,
-         city, details, delivery_type, delivery_time, comment)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         city, region, details, delivery_type, delivery_time, comment)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
          RETURNING *",
     )
     .bind(user_id)
@@ -97,6 +99,7 @@ pub async fn create_order_with_items_raw(
     .bind(contact.phone_number)
     .bind(contact.address)
     .bind(contact.city)
+    .bind(contact.region)
     .bind(contact.details)
     .bind(contact.delivery_type)
     .bind(contact.delivery_time)

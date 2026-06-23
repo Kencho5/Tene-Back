@@ -102,6 +102,7 @@ pub struct Order {
     pub phone_number: String,
     pub address: String,
     pub city: Option<String>,
+    pub region: Option<String>,
     pub details: Option<String>,
     pub delivery_type: String,
     pub delivery_time: String,
@@ -208,6 +209,8 @@ pub struct CheckoutRequest {
     pub phone_number: String,
     pub address: String,
     pub city: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
     pub details: Option<String>,
     pub delivery_type: String,
     pub delivery_time: String,
@@ -250,6 +253,8 @@ pub struct PaymentLinkRequest {
     pub phone_number: String,
     pub address: String,
     pub city: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
     pub details: Option<String>,
     pub delivery_type: String,
     pub delivery_time: String,

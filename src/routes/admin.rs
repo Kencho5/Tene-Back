@@ -1216,6 +1216,7 @@ pub async fn create_payment_link(
         &payload.delivery_type,
         &payload.delivery_time,
         payload.city.as_deref(),
+        payload.region.as_deref(),
     )?;
 
     let amount_tetri = ((subtotal + delivery) * Decimal::from(100))
@@ -1237,6 +1238,7 @@ pub async fn create_payment_link(
         phone_number: &payload.phone_number,
         address: &payload.address,
         city: payload.city.as_deref(),
+        region: payload.region.as_deref(),
         details: payload.details.as_deref(),
         delivery_type: &payload.delivery_type,
         delivery_time: &payload.delivery_time,

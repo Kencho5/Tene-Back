@@ -124,6 +124,7 @@ pub async fn checkout(
         &payload.delivery_type,
         &payload.delivery_time,
         payload.city.as_deref(),
+        payload.region.as_deref(),
     )?;
 
     let amount_tetri = ((subtotal + delivery) * Decimal::from(100))
@@ -199,8 +200,14 @@ fn validate_checkout_request(payload: &CheckoutRequest) -> Result<()> {
         if payload.address.is_empty() {
             return Err(AppError::BadRequest("მისამართი აუცილებელია".to_string()));
         }
-        if payload.city.as_deref().unwrap_or("").is_empty() {
+        let city = payload.city.as_deref().unwrap_or("").trim();
+        if city.is_empty() {
             return Err(AppError::BadRequest("ქალაქი აუცილებელია".to_string()));
+        }
+        if city.eq_ignore_ascii_case("tbilisi")
+            && payload.region.as_deref().unwrap_or("").trim().is_empty()
+        {
+            return Err(AppError::BadRequest("რაიონი აუცილებელია".to_string()));
         }
     }
 

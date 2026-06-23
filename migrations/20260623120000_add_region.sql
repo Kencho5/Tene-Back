@@ -1,0 +1,5 @@
+ALTER TABLE orders
+    ADD COLUMN region VARCHAR(255);
+
+ALTER TABLE user_addresses
+    ADD COLUMN region VARCHAR(255) NOT NULL DEFAULT '';

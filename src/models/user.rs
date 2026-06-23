@@ -57,6 +57,8 @@ pub struct GoogleAuthRequest {
 pub struct UserAddress {
     pub id: Option<i32>,
     pub city: String,
+    #[serde(default)]
+    pub region: String,
     pub address: String,
     pub details: String,
 }

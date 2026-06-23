@@ -74,10 +74,11 @@ pub async fn add_user_address(
     payload: UserAddress,
 ) -> Result<UserAddress> {
     let address = sqlx::query_as::<_, UserAddress>(
-        "INSERT INTO user_addresses (user_id, city, address, details) VALUES ($1, $2, $3, $4) RETURNING id, city, address, details"
+        "INSERT INTO user_addresses (user_id, city, region, address, details) VALUES ($1, $2, $3, $4, $5) RETURNING id, city, region, address, details"
     )
         .bind(user_id)
         .bind(payload.city)
+        .bind(payload.region)
         .bind(payload.address)
         .bind(payload.details)
         .fetch_one(pool)
@@ -88,7 +89,7 @@ pub async fn add_user_address(
 
 pub async fn get_user_addresses(pool: &PgPool, user_id: i32) -> Result<Vec<UserAddress>> {
     let addresses = sqlx::query_as::<_, UserAddress>(
-        "SELECT id, city, address, details FROM user_addresses WHERE user_id = $1",
+        "SELECT id, city, region, address, details FROM user_addresses WHERE user_id = $1",
     )
     .bind(user_id)
     .fetch_all(pool)
@@ -104,9 +105,10 @@ pub async fn edit_user_address(
     payload: UserAddress,
 ) -> Result<Option<UserAddress>> {
     let address = sqlx::query_as::<_, UserAddress>(
-        "UPDATE user_addresses SET city = $1, address = $2, details = $3 WHERE user_id = $4 AND id = $5 RETURNING id, city, address, details"
+        "UPDATE user_addresses SET city = $1, region = $2, address = $3, details = $4 WHERE user_id = $5 AND id = $6 RETURNING id, city, region, address, details"
     )
     .bind(payload.city)
+    .bind(payload.region)
     .bind(payload.address)
     .bind(payload.details)
     .bind(user_id)
