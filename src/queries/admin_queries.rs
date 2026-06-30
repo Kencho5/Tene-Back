@@ -349,6 +349,10 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push("customer_name ILIKE ");
         query_builder.push_bind(pattern.clone());
         query_builder.push(" OR customer_surname ILIKE ");
+        query_builder.push_bind(pattern.clone());
+        query_builder.push(" OR phone_number ILIKE ");
+        query_builder.push_bind(pattern.clone());
+        query_builder.push(" OR email ILIKE ");
         query_builder.push_bind(pattern);
         query_builder.push(")");
     }
