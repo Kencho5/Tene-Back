@@ -14,7 +14,7 @@ use crate::{
     models::*,
     queries::{admin_queries, category_queries, order_queries, products_queries, user_queries},
     services::{
-        delivery_service, flitt_service,
+        flitt_service,
         image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
     },
 };
@@ -1185,7 +1185,12 @@ pub async fn create_payment_link(
         return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
     }
 
-    let mut subtotal = Decimal::ZERO;
+    if payload.price <= Decimal::ZERO {
+        return Err(AppError::BadRequest(
+            "ფასი უნდა იყოს დადებითი".to_string(),
+        ));
+    }
+
     let mut order_items = Vec::with_capacity(payload.items.len());
     for item in &payload.items {
         if item.quantity <= 0 {
@@ -1200,7 +1205,6 @@ pub async fn create_payment_link(
                 item.product_id
             )));
         }
-        subtotal += item.price * Decimal::from(item.quantity);
         order_items.push(OrderItemData {
             product_id: item.product_id.clone(),
             color: item.color.clone(),
@@ -1212,14 +1216,7 @@ pub async fn create_payment_link(
         });
     }
 
-    let delivery = delivery_service::calculate_delivery(
-        &payload.delivery_type,
-        &payload.delivery_time,
-        payload.city.as_deref(),
-        payload.region.as_deref(),
-    )?;
-
-    let amount_tetri = ((subtotal + delivery) * Decimal::from(100))
+    let amount_tetri = (payload.price * Decimal::from(100))
         .trunc()
         .to_i32()
         .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;

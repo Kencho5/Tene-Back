@@ -260,5 +260,6 @@ pub struct PaymentLinkRequest {
     pub delivery_time: String,
     pub comment: Option<String>,
     pub items: Vec<PaymentLinkItem>,
+    pub price: Decimal,
 }
 
