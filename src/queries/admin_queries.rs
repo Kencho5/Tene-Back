@@ -542,22 +542,50 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
     .fetch_all(pool)
     .await?;
 
+    let where_orders = match params.period {
+        Some(AnalyticsPeriod::Today) => "WHERE o.created_at >= CURRENT_DATE",
+        Some(AnalyticsPeriod::Yesterday) => {
+            "WHERE o.created_at >= CURRENT_DATE - INTERVAL '1 day' AND o.created_at < CURRENT_DATE"
+        }
+        Some(AnalyticsPeriod::Last7Days) => "WHERE o.created_at >= CURRENT_DATE - INTERVAL '7 days'",
+        Some(AnalyticsPeriod::Last30Days) => {
+            "WHERE o.created_at >= CURRENT_DATE - INTERVAL '30 days'"
+        }
+        None => "",
+    };
+
     let conversion_rates = sqlx::query_as::<_, ConversionRate>(
         &format!(
-            "SELECT p.id as product_id, p.name as product_name,
-                    COUNT(DISTINCT pv.user_id) as viewers,
-                    COUNT(DISTINCT oi.order_id) as purchases,
+            "WITH view_counts AS (
+                 SELECT product_id, COUNT(*) as views
+                 FROM product_views
+                 {where_bare}
+                 GROUP BY product_id
+             ),
+             purchase_counts AS (
+                 SELECT oi.product_id, COUNT(DISTINCT o.id) as purchases
+                 FROM order_items oi
+                 JOIN orders o ON o.id = oi.order_id
+                 {where_orders} {and_approved}
+                 GROUP BY oi.product_id
+             )
+             SELECT p.id as product_id, p.name as product_name,
+                    vc.views as viewers,
+                    COALESCE(pc.purchases, 0) as purchases,
                     ROUND(
-                        COUNT(DISTINCT oi.order_id)::numeric /
-                        NULLIF(COUNT(DISTINCT pv.user_id), 0) * 100, 2
+                        LEAST(COALESCE(pc.purchases, 0)::numeric / vc.views, 1) * 100, 2
                     ) as conversion_pct
-             FROM products p
-             LEFT JOIN product_views pv ON pv.product_id = p.id {join_pv}
-             LEFT JOIN order_items oi ON oi.product_id = p.id
-             GROUP BY p.id, p.name
-             HAVING COUNT(DISTINCT pv.user_id) > 0
-             ORDER BY conversion_pct DESC
-             LIMIT 10"
+             FROM view_counts vc
+             JOIN products p ON p.id = vc.product_id
+             LEFT JOIN purchase_counts pc ON pc.product_id = vc.product_id
+             WHERE vc.views > 0
+             ORDER BY conversion_pct DESC, viewers DESC
+             LIMIT 10",
+            and_approved = if where_orders.is_empty() {
+                "WHERE o.status = 'approved'"
+            } else {
+                "AND o.status = 'approved'"
+            },
         ),
     )
     .fetch_all(pool)
