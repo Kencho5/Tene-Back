@@ -181,6 +181,7 @@ pub async fn build_products_response_ordered(
             let images = image_groups.remove(id).unwrap_or_default();
             let seo = seo_map.remove(id);
             out.push(ProductResponse {
+                videos: ProductResponse::videos_from(&product),
                 data: product,
                 images,
                 categories: Vec::new(),
@@ -246,6 +247,7 @@ pub async fn search_products(
             Some((product, images, categories, seo)) => {
                 Ok(crate::models::ProductSearchResponse {
                     products: vec![ProductResponse {
+                        videos: ProductResponse::videos_from(&product),
                         data: product,
                         images,
                         categories,
@@ -486,6 +488,7 @@ pub async fn search_products(
         .into_iter()
         .map(|result| ProductResponse {
             images: image_groups.remove(&result.product.id).unwrap_or_default(),
+            videos: ProductResponse::videos_from(&result.product),
             categories: category_groups
                 .remove(&result.product.id)
                 .unwrap_or_default(),
@@ -544,6 +547,7 @@ pub async fn get_related_products(
             let images = image_groups.remove(&product.id).unwrap_or_default();
             let seo = seo_map.remove(&product.id);
             ProductResponse {
+                videos: ProductResponse::videos_from(&product),
                 data: product,
                 images,
                 categories: Vec::new(),

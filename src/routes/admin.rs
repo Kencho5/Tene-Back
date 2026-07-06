@@ -58,6 +58,49 @@ fn resolve_discount(
     Ok(None)
 }
 
+fn detect_video_platform(url: &str) -> Option<VideoPlatform> {
+    let host = url
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(url)
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_start_matches("www.")
+        .to_ascii_lowercase();
+
+    match host.as_str() {
+        "youtube.com" | "m.youtube.com" | "youtu.be" => Some(VideoPlatform::Youtube),
+        "facebook.com" | "m.facebook.com" | "fb.watch" | "fb.com" => Some(VideoPlatform::Facebook),
+        _ => None,
+    }
+}
+
+fn validate_videos(urls: &[String]) -> Result<serde_json::Value> {
+    let mut videos = Vec::with_capacity(urls.len());
+    for url in urls {
+        let url = url.trim();
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err(AppError::BadRequest(format!(
+                "არასწორი ვიდეო URL: {}",
+                url
+            )));
+        }
+        let platform = detect_video_platform(url).ok_or_else(|| {
+            AppError::BadRequest(format!(
+                "მხოლოდ YouTube ან Facebook ვიდეო URL-ებია დაშვებული: {}",
+                url
+            ))
+        })?;
+        videos.push(ProductVideo {
+            platform,
+            url: url.to_string(),
+        });
+    }
+    serde_json::to_value(videos)
+        .map_err(|e| AppError::InternalError(format!("ვიდეოების სერიალიზაცია ვერ მოხერხდა: {}", e)))
+}
+
 // products
 pub async fn create_product(
     State(state): State<AppState>,
@@ -99,7 +142,12 @@ pub async fn create_product(
         }
     }
 
-    let product = admin_queries::create_product(&state.db, &payload).await?;
+    let videos = match payload.videos {
+        Some(ref urls) => validate_videos(urls)?,
+        None => serde_json::json!([]),
+    };
+
+    let product = admin_queries::create_product(&state.db, &payload, &videos).await?;
 
     let seo = if let Some(ref seo_req) = payload.seo {
         Some(admin_queries::upsert_product_seo(&state.db, &product.id, seo_req).await?)
@@ -111,6 +159,7 @@ pub async fn create_product(
     let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
 
     Ok(Json(ProductResponse {
+        videos: ProductResponse::videos_from(&product),
         data: product,
         images,
         categories,
@@ -145,7 +194,12 @@ pub async fn update_product(
         }
     }
 
-    let product = admin_queries::update_product(&state.db, &id, &payload).await?;
+    let videos = match payload.videos {
+        Some(ref urls) => Some(validate_videos(urls)?),
+        None => None,
+    };
+
+    let product = admin_queries::update_product(&state.db, &id, &payload, videos.as_ref()).await?;
 
     let seo = if let Some(ref seo_req) = payload.seo {
         Some(admin_queries::upsert_product_seo(&state.db, &product.id, seo_req).await?)
@@ -157,6 +211,7 @@ pub async fn update_product(
     let categories = category_queries::get_product_categories(&state.db, &product.id).await?;
 
     Ok(Json(ProductResponse {
+        videos: ProductResponse::videos_from(&product),
         data: product,
         images,
         categories,

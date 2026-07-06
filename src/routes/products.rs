@@ -36,6 +36,7 @@ pub async fn get_product(
         .ok_or(AppError::NotFound("პროდუქტი ვერ მოიძებნა".to_string()))?;
 
     Ok(Json(ProductResponse {
+        videos: ProductResponse::videos_from(&data),
         data,
         images,
         categories,

@@ -18,9 +18,24 @@ pub struct Product {
     pub brand_name: Option<String>,
     pub cable_type_id: Option<i32>,
     pub warranty: Option<String>,
+    #[serde(skip)]
+    pub videos: serde_json::Value,
     pub enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProductVideo {
+    pub platform: VideoPlatform,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoPlatform {
+    Youtube,
+    Facebook,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -71,8 +86,15 @@ pub struct ProductSeoRequest {
 pub struct ProductResponse {
     pub data: Product,
     pub images: Vec<ProductImage>,
+    pub videos: Vec<ProductVideo>,
     pub categories: Vec<Category>,
     pub seo: Option<ProductSeo>,
+}
+
+impl ProductResponse {
+    pub fn videos_from(product: &Product) -> Vec<ProductVideo> {
+        serde_json::from_value(product.videos.clone()).unwrap_or_default()
+    }
 }
 
 #[derive(Debug, Serialize)]

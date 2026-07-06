@@ -20,6 +20,7 @@ pub struct ProductRequest {
     pub cable_type_id: Option<i32>,
     pub warranty: Option<String>,
     pub enabled: Option<bool>,
+    pub videos: Option<Vec<String>>,
     pub seo: Option<ProductSeoRequest>,
 }
 
