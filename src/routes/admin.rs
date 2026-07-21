@@ -1233,45 +1233,19 @@ pub async fn create_payment_link(
     State(state): State<AppState>,
     Json(payload): Json<PaymentLinkRequest>,
 ) -> Result<Json<CheckoutResponse>> {
-    if payload.items.is_empty() {
-        return Err(AppError::BadRequest("შეკვეთა ცარიელია".to_string()));
-    }
-    if payload.email.is_empty() || !payload.email.contains('@') {
-        return Err(AppError::BadRequest("არასწორი ელფოსტა".to_string()));
-    }
+    let price = payload
+        .price
+        .as_ref()
+        .and_then(|p| p.parse::<Decimal>().ok())
+        .ok_or_else(|| AppError::BadRequest("არასწორი ფასი".to_string()))?;
 
-    if payload.price <= Decimal::ZERO {
+    if price <= Decimal::ZERO {
         return Err(AppError::BadRequest(
             "ფასი უნდა იყოს დადებითი".to_string(),
         ));
     }
 
-    let mut order_items = Vec::with_capacity(payload.items.len());
-    for item in &payload.items {
-        if item.quantity <= 0 {
-            return Err(AppError::BadRequest(format!(
-                "არასწორი რაოდენობა პროდუქტისთვის {}",
-                item.product_id
-            )));
-        }
-        if item.price < Decimal::ZERO {
-            return Err(AppError::BadRequest(format!(
-                "არასწორი ფასი პროდუქტისთვის {}",
-                item.product_id
-            )));
-        }
-        order_items.push(OrderItemData {
-            product_id: item.product_id.clone(),
-            color: item.color.clone(),
-            quantity: item.quantity,
-            price: item.price,
-            product_name: item.product_name.clone(),
-            image: serde_json::Value::Null,
-            cable_config: None,
-        });
-    }
-
-    let amount_tetri = (payload.price * Decimal::from(100))
+    let amount_tetri = (price * Decimal::from(100))
         .trunc()
         .to_i32()
         .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
@@ -1284,16 +1258,21 @@ pub async fn create_payment_link(
 
     let order_id = format!("tene_{}", Uuid::new_v4());
 
+    let customer = CustomerInfo::Individual {
+        name: String::new(),
+        surname: String::new(),
+    };
+
     let contact = order_queries::OrderContact {
-        customer: &payload.customer,
-        email: &payload.email,
-        phone_number: &payload.phone_number,
-        address: &payload.address,
-        city: payload.city.as_deref(),
-        region: payload.region.as_deref(),
-        details: payload.details.as_deref(),
-        delivery_type: &payload.delivery_type,
-        delivery_time: &payload.delivery_time,
+        customer: &customer,
+        email: payload.email.as_deref().unwrap_or(""),
+        phone_number: payload.phone_number.as_deref().unwrap_or(""),
+        address: payload.address.as_deref().unwrap_or(""),
+        city: None,
+        region: None,
+        details: None,
+        delivery_type: "",
+        delivery_time: "",
         comment: payload.comment.as_deref(),
     };
 
@@ -1303,7 +1282,7 @@ pub async fn create_payment_link(
         &order_id,
         amount_tetri,
         &contact,
-        &order_items,
+        &[],
     )
     .await?;
 
