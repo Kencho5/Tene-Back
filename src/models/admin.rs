@@ -6,6 +6,14 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
+fn deserialize_double_option<'de, T, D>(deserializer: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ProductRequest {
     pub id: Option<String>,
@@ -17,7 +25,8 @@ pub struct ProductRequest {
     pub quantity: Option<i32>,
     pub specifications: Option<serde_json::Value>,
     pub brand_id: Option<i32>,
-    pub cable_type_id: Option<i32>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    pub cable_type_id: Option<Option<i32>>,
     pub warranty: Option<String>,
     pub enabled: Option<bool>,
     pub videos: Option<Vec<String>>,

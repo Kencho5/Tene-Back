@@ -41,7 +41,7 @@ pub async fn create_product(
             .unwrap_or(&serde_json::json!({})),
     )
     .bind(&req.brand_id)
-    .bind(&req.cable_type_id)
+    .bind(req.cable_type_id.flatten())
     .bind(&req.warranty)
     .bind(videos)
     .bind(req.enabled.unwrap_or(true))
@@ -67,12 +67,12 @@ pub async fn update_product(
             discount = COALESCE($4, discount),
             specifications = COALESCE($5, specifications),
             brand_id = COALESCE($6, brand_id),
-            cable_type_id = COALESCE($7, cable_type_id),
-            warranty = COALESCE($8, warranty),
-            videos = COALESCE($9, videos),
-            enabled = COALESCE($10, enabled),
+            cable_type_id = CASE WHEN $7 THEN $8 ELSE cable_type_id END,
+            warranty = COALESCE($9, warranty),
+            videos = COALESCE($10, videos),
+            enabled = COALESCE($11, enabled),
             updated_at = NOW()
-        WHERE id = $11
+        WHERE id = $12
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
@@ -82,7 +82,8 @@ pub async fn update_product(
     .bind(&req.discount)
     .bind(&req.specifications)
     .bind(&req.brand_id)
-    .bind(&req.cable_type_id)
+    .bind(req.cable_type_id.is_some())
+    .bind(req.cable_type_id.flatten())
     .bind(&req.warranty)
     .bind(videos)
     .bind(&req.enabled)
