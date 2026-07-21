@@ -375,8 +375,17 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
     }
 
     if let Some(ref status) = params.status {
-        query_builder.push(" AND status = ");
-        query_builder.push_bind(status);
+        let statuses: Vec<String> = status
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect();
+        if !statuses.is_empty() {
+            query_builder.push(" AND status = ANY(");
+            query_builder.push_bind(statuses);
+            query_builder.push(")");
+        }
     }
 
     if let Some(from_date) = params.from_date {
