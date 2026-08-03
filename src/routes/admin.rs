@@ -1229,6 +1229,119 @@ pub async fn export_orders(
     Ok((headers, buffer).into_response())
 }
 
+pub async fn create_order(
+    State(state): State<AppState>,
+    Json(payload): Json<AdminOrderRequest>,
+) -> Result<Json<OrderResponse>> {
+    let product_ids: Vec<String> = payload
+        .items
+        .iter()
+        .filter_map(|i| i.product_id.clone())
+        .collect();
+
+    let products = if product_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        products_queries::find_by_ids(&state.db, &product_ids).await?
+    };
+
+    let images = if product_ids.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        products_queries::find_images_by_product_ids(&state.db, &product_ids).await?
+    };
+
+    let mut order_items = Vec::with_capacity(payload.items.len());
+    let mut subtotal = Decimal::ZERO;
+
+    for item in &payload.items {
+        let product = item
+            .product_id
+            .as_ref()
+            .and_then(|id| products.get(id.as_str()));
+
+        let quantity = item.quantity.unwrap_or(1);
+
+        let price = item
+            .price
+            .or_else(|| product.map(|p| p.price))
+            .unwrap_or(Decimal::ZERO);
+
+        let product_name = item
+            .product_name
+            .clone()
+            .or_else(|| product.map(|p| p.name.clone()))
+            .unwrap_or_default();
+
+        let image = item
+            .product_id
+            .as_ref()
+            .and_then(|id| images.get(id.as_str()))
+            .and_then(|imgs| match &item.color {
+                Some(color) => imgs
+                    .iter()
+                    .find(|img| img.color.as_deref() == Some(color.as_str())),
+                None => imgs.iter().find(|img| img.is_primary).or(imgs.first()),
+            })
+            .map(serde_json::to_value)
+            .transpose()?
+            .unwrap_or(serde_json::Value::Null);
+
+        subtotal += price * Decimal::from(quantity);
+
+        order_items.push(OrderItemData {
+            product_id: item.product_id.clone().unwrap_or_default(),
+            color: item.color.clone(),
+            quantity,
+            price,
+            product_name,
+            image,
+            cable_config: item
+                .cable_config
+                .as_ref()
+                .map(|c| serde_json::json!({ "watts": c.watts, "length_cm": c.length_cm })),
+        });
+    }
+
+    let amount_tetri = match payload.amount {
+        Some(a) => a,
+        None => subtotal,
+    };
+    let amount_tetri = (amount_tetri * Decimal::from(100))
+        .trunc()
+        .to_i32()
+        .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
+
+    let order_id = format!("tene_{}", Uuid::new_v4());
+    let status = payload.status.as_deref().unwrap_or("created");
+
+    let order = order_queries::create_admin_order(
+        &state.db,
+        &order_id,
+        amount_tetri,
+        status,
+        &payload,
+        &order_items,
+    )
+    .await?;
+
+    if !payload.comment_image_uuids.is_empty() {
+        order_queries::attach_comment_images(&state.db, order.id, &payload.comment_image_uuids)
+            .await?;
+    }
+
+    let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
+    let comment_image_rows =
+        order_queries::get_comment_images_for_orders(&state.db, &[order.id]).await?;
+    let comment_images = super::orders::build_comment_images(&state, comment_image_rows);
+
+    Ok(Json(OrderResponse {
+        order,
+        items,
+        comment_images,
+    }))
+}
+
 pub async fn create_payment_link(
     State(state): State<AppState>,
     Json(payload): Json<PaymentLinkRequest>,

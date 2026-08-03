@@ -4,7 +4,8 @@ use sqlx::PgPool;
 use crate::{
     error::Result,
     models::{
-        CheckoutRequest, CustomerInfo, Order, OrderCommentImage, OrderItem, OrderItemData,
+        AdminOrderRequest, CheckoutRequest, CustomerInfo, Order, OrderCommentImage, OrderItem,
+        OrderItemData,
     },
 };
 use uuid::Uuid;
@@ -130,6 +131,84 @@ pub async fn create_order_with_items_raw(
     .bind(&cable_configs)
     .execute(&mut *tx)
     .await?;
+
+    tx.commit().await?;
+    Ok(order)
+}
+
+pub async fn create_admin_order(
+    pool: &PgPool,
+    order_id: &str,
+    amount: i32,
+    status: &str,
+    req: &AdminOrderRequest,
+    items: &[OrderItemData],
+) -> Result<Order> {
+    let mut tx = pool.begin().await?;
+
+    let customer_type = req.customer_type.as_deref().unwrap_or_else(|| {
+        if req.organization_name.is_some() {
+            "company"
+        } else {
+            "individual"
+        }
+    });
+
+    let order = sqlx::query_as::<_, Order>(
+        "INSERT INTO orders (user_id, order_id, amount, status, customer_type, customer_name, customer_surname,
+         organization_type, organization_name, organization_code, email, phone_number, address,
+         city, region, details, delivery_type, delivery_time, comment)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         RETURNING *",
+    )
+    .bind(req.user_id)
+    .bind(order_id)
+    .bind(amount)
+    .bind(status)
+    .bind(customer_type)
+    .bind(req.customer_name.as_deref())
+    .bind(req.customer_surname.as_deref())
+    .bind(req.organization_type.as_deref())
+    .bind(req.organization_name.as_deref())
+    .bind(req.organization_code.as_deref())
+    .bind(req.email.as_deref().unwrap_or(""))
+    .bind(req.phone_number.as_deref().unwrap_or(""))
+    .bind(req.address.as_deref().unwrap_or(""))
+    .bind(req.city.as_deref())
+    .bind(req.region.as_deref())
+    .bind(req.details.as_deref())
+    .bind(req.delivery_type.as_deref().unwrap_or(""))
+    .bind(req.delivery_time.as_deref().unwrap_or(""))
+    .bind(req.comment.as_deref())
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if !items.is_empty() {
+        let product_ids: Vec<&str> = items.iter().map(|i| i.product_id.as_str()).collect();
+        let colors: Vec<Option<&str>> = items.iter().map(|i| i.color.as_deref()).collect();
+        let quantities: Vec<i32> = items.iter().map(|i| i.quantity).collect();
+        let prices: Vec<Decimal> = items.iter().map(|i| i.price).collect();
+        let product_names: Vec<&str> = items.iter().map(|i| i.product_name.as_str()).collect();
+        let product_images: Vec<serde_json::Value> =
+            items.iter().map(|i| i.image.clone()).collect();
+        let cable_configs: Vec<Option<serde_json::Value>> =
+            items.iter().map(|i| i.cable_config.clone()).collect();
+
+        sqlx::query(
+            "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image, cable_config)
+             SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[]), unnest($8::jsonb[])",
+        )
+        .bind(order.id)
+        .bind(&product_ids)
+        .bind(&colors)
+        .bind(&quantities)
+        .bind(&prices)
+        .bind(&product_names)
+        .bind(&product_images)
+        .bind(&cable_configs)
+        .execute(&mut *tx)
+        .await?;
+    }
 
     tx.commit().await?;
     Ok(order)

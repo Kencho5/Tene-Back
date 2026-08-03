@@ -237,6 +237,66 @@ pub struct CheckoutResponse {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct AdminOrderItemRequest {
+    #[serde(default)]
+    pub product_id: Option<String>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub quantity: Option<i32>,
+    #[serde(default)]
+    pub price: Option<Decimal>,
+    #[serde(default)]
+    pub product_name: Option<String>,
+    #[serde(default)]
+    pub cable_config: Option<CableConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AdminOrderRequest {
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub amount: Option<Decimal>,
+    #[serde(default)]
+    pub customer_type: Option<String>,
+    #[serde(default)]
+    pub customer_name: Option<String>,
+    #[serde(default)]
+    pub customer_surname: Option<String>,
+    #[serde(default)]
+    pub organization_type: Option<String>,
+    #[serde(default)]
+    pub organization_name: Option<String>,
+    #[serde(default)]
+    pub organization_code: Option<String>,
+    #[serde(default)]
+    pub email: Option<String>,
+    #[serde(default)]
+    pub phone_number: Option<String>,
+    #[serde(default)]
+    pub address: Option<String>,
+    #[serde(default)]
+    pub city: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub details: Option<String>,
+    #[serde(default)]
+    pub delivery_type: Option<String>,
+    #[serde(default)]
+    pub delivery_time: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<i32>,
+    #[serde(default)]
+    pub items: Vec<AdminOrderItemRequest>,
+    #[serde(default)]
+    pub comment_image_uuids: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct PaymentLinkRequest {
     #[serde(default)]
     pub price: Option<String>,
