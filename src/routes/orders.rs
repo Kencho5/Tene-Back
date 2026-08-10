@@ -12,21 +12,21 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    error::{AppError, Result},
+    error::{AppError, Result, SESSION_EXPIRED},
     models::{
         CableVariant, CheckoutAnalyticsEvent, CheckoutRequest, CheckoutResponse, CommentImage,
         CommentImageUploadUrl, CommentImageUrlRequest, CommentImageUrlResponse, OrderCommentImage,
         OrderItemData, OrderResponse,
     },
-    queries::{admin_queries, order_queries, products_queries},
+    queries::{admin_queries, order_queries, products_queries, user_queries},
     services::{delivery_service, email_service, flitt_service, image_url_service},
-    utils::extractors::{OptionalClaims, extract_user_id},
+    utils::extractors::{LenientClaims, OptionalClaims, extract_user_id},
     utils::jwt::Claims,
 };
 
 pub async fn track_checkout_analytics(
     State(state): State<AppState>,
-    OptionalClaims(claims): OptionalClaims,
+    LenientClaims(claims): LenientClaims,
     Json(event): Json<CheckoutAnalyticsEvent>,
 ) -> StatusCode {
     let user_id = claims.as_ref().and_then(|c| extract_user_id(c).ok());
@@ -496,8 +496,17 @@ pub async fn get_order(
         let viewer_id = claims
             .as_ref()
             .and_then(|c| extract_user_id(c).ok())
-            .ok_or_else(|| AppError::Unauthorized("არაავტორიზებული".to_string()))?;
+            .ok_or_else(|| {
+                AppError::Unauthorized("შეკვეთის სანახავად გთხოვთ შეხვიდეთ სისტემაში".to_string())
+            })?;
         if viewer_id != owner_id {
+            return Err(AppError::NotFound("შეკვეთა ვერ მოიძებნა".to_string()));
+        }
+    } else if let Some(viewer_id) = claims.as_ref().and_then(|c| extract_user_id(c).ok()) {
+        let viewer = user_queries::find_by_id(&state.db, viewer_id)
+            .await?
+            .ok_or_else(|| AppError::TokenInvalid(SESSION_EXPIRED.to_string()))?;
+        if !viewer.email.eq_ignore_ascii_case(&order.email) {
             return Err(AppError::NotFound("შეკვეთა ვერ მოიძებნა".to_string()));
         }
     }
@@ -535,7 +544,10 @@ pub async fn get_orders(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<Vec<OrderResponse>>> {
     let user_id = extract_user_id(&claims)?;
-    let orders = order_queries::get_user_orders(&state.db, user_id).await?;
+    let user = user_queries::find_by_id(&state.db, user_id)
+        .await?
+        .ok_or_else(|| AppError::TokenInvalid(SESSION_EXPIRED.to_string()))?;
+    let orders = order_queries::get_user_orders(&state.db, user_id, &user.email).await?;
 
     let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
     let all_items = order_queries::get_items_for_orders(&state.db, &order_db_ids).await?;

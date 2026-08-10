@@ -6,6 +6,8 @@ use axum::{
 use serde_json::json;
 use std::fmt;
 
+pub const SESSION_EXPIRED: &str = "სესიის ვადა ამოიწურა, გთხოვთ, თავიდან შეხვიდეთ სისტემაში";
+
 #[derive(Debug)]
 pub enum AppError {
     DatabaseError(sqlx::Error),
@@ -15,6 +17,7 @@ pub enum AppError {
     BadRequest(String),
     Conflict(String),
     Unauthorized(String),
+    TokenInvalid(String),
     Forbidden(String),
 }
 
@@ -28,6 +31,7 @@ impl fmt::Display for AppError {
             AppError::BadRequest(msg) => write!(f, "არასწორი მოთხოვნა: {}", msg),
             AppError::Conflict(msg) => write!(f, "კონფლიქტი: {}", msg),
             AppError::Unauthorized(msg) => write!(f, "არაავტორიზებული: {}", msg),
+            AppError::TokenInvalid(msg) => write!(f, "არაავტორიზებული: {}", msg),
             AppError::Forbidden(msg) => write!(f, "აკრძალული: {}", msg),
         }
     }
@@ -55,6 +59,8 @@ impl From<serde_json::Error> for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        let mut error_code: Option<&'static str> = None;
+
         let (status, error_message) = match self {
             AppError::DatabaseError(ref e) => {
                 tracing::error!("Database error: {:?}", e);
@@ -75,11 +81,16 @@ impl IntoResponse for AppError {
             AppError::BadRequest(ref msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
             AppError::Conflict(ref msg) => (StatusCode::CONFLICT, msg.as_str()),
             AppError::Unauthorized(ref msg) => (StatusCode::UNAUTHORIZED, msg.as_str()),
+            AppError::TokenInvalid(ref msg) => {
+                error_code = Some("token_invalid");
+                (StatusCode::UNAUTHORIZED, msg.as_str())
+            }
             AppError::Forbidden(ref msg) => (StatusCode::FORBIDDEN, msg.as_str()),
         };
 
         let body = Json(json!({
             "message": error_message,
+            "code": error_code,
         }));
 
         (status, body).into_response()

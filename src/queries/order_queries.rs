@@ -336,11 +336,15 @@ pub async fn get_order_by_order_id(pool: &PgPool, order_id: &str) -> Result<Opti
     Ok(order)
 }
 
-pub async fn get_user_orders(pool: &PgPool, user_id: i32) -> Result<Vec<Order>> {
+pub async fn get_user_orders(pool: &PgPool, user_id: i32, email: &str) -> Result<Vec<Order>> {
     let orders = sqlx::query_as::<_, Order>(
-        "SELECT * FROM orders WHERE user_id = $1 AND status != 'pending' ORDER BY created_at DESC",
+        "SELECT * FROM orders
+         WHERE (user_id = $1 OR (user_id IS NULL AND lower(email) = lower($2)))
+           AND status != 'pending'
+         ORDER BY created_at DESC",
     )
     .bind(user_id)
+    .bind(email)
     .fetch_all(pool)
     .await?;
 

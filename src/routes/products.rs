@@ -12,7 +12,7 @@ use crate::{
         ProductResponse, ProductSearchResponse, TopProductsQuery,
     },
     queries::{admin_queries, products_queries},
-    utils::extractors::OptionalClaims,
+    utils::extractors::LenientClaims,
 };
 
 pub async fn search_product(
@@ -110,7 +110,7 @@ pub async fn get_cable_variants(
 pub async fn add_product_views(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    OptionalClaims(claims): OptionalClaims,
+    LenientClaims(claims): LenientClaims,
 ) -> Result<StatusCode> {
     let user_id = claims.map(|c| c.user_id);
     products_queries::add_product_views(&state.db, &id, user_id).await?;
