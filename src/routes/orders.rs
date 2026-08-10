@@ -520,6 +520,7 @@ pub async fn get_order(
         order,
         items,
         comment_images,
+        created_by: None,
     }))
 }
 
@@ -576,6 +577,7 @@ pub async fn get_orders(
                 order,
                 items,
                 comment_images,
+                created_by: None,
             }
         })
         .collect();

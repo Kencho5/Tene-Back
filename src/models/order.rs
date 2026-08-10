@@ -108,6 +108,9 @@ pub struct Order {
     pub delivery_time: String,
     pub comment: Option<String>,
     pub checkout_url: Option<String>,
+    pub source: String,
+    pub created_by_user_id: Option<i32>,
+    pub payment_method: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -149,6 +152,15 @@ pub struct OrderResponse {
     pub order: Order,
     pub items: Vec<OrderItem>,
     pub comment_images: Vec<CommentImage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<OrderCreator>,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct OrderCreator {
+    pub id: i32,
+    pub name: String,
+    pub email: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -236,6 +248,40 @@ pub struct CheckoutResponse {
     pub checkout_url: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentMethod {
+    Pos,
+    Cash,
+    Transfer,
+}
+
+impl PaymentMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PaymentMethod::Pos => "pos",
+            PaymentMethod::Cash => "cash",
+            PaymentMethod::Transfer => "transfer",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrderSource {
+    Web,
+    Admin,
+}
+
+impl OrderSource {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OrderSource::Web => "web",
+            OrderSource::Admin => "admin",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct AdminOrderItemRequest {
     #[serde(default)]
@@ -290,6 +336,8 @@ pub struct AdminOrderRequest {
     pub comment: Option<String>,
     #[serde(default)]
     pub user_id: Option<i32>,
+    #[serde(default)]
+    pub payment_method: Option<PaymentMethod>,
     #[serde(default)]
     pub items: Vec<AdminOrderItemRequest>,
     #[serde(default)]

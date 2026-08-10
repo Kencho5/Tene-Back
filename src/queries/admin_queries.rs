@@ -6,8 +6,8 @@ use crate::{
         AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
         CableVariant, CableVariantRequest, CableVariantUpdate, CartSnapshotItem, CheckoutEventRow,
         CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
-        HighViewsLowSales, MostViewedProduct, Order,
-        OrderQuery, OrderSearchResponse, Product, ProductImage, ProductRequest, ProductSeo,
+        HighViewsLowSales, MostViewedProduct, Order, OrderCreator,
+        OrderQuery, OrderSearchResponse, OrderSource, Product, ProductImage, ProductRequest, ProductSeo,
         ProductSeoRequest, TrendingProduct,
         UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
         ViewsByHour,
@@ -337,6 +337,24 @@ pub async fn update_order_status(
     Ok(order)
 }
 
+pub async fn get_order_creators(
+    pool: &PgPool,
+    user_ids: &[i32],
+) -> Result<std::collections::HashMap<i32, OrderCreator>> {
+    if user_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let creators = sqlx::query_as::<_, OrderCreator>(
+        "SELECT id, name, email FROM users WHERE id = ANY($1)",
+    )
+    .bind(user_ids)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(creators.into_iter().map(|c| (c.id, c)).collect())
+}
+
 pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearchResponse> {
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);
@@ -389,6 +407,19 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         }
     }
 
+    query_builder.push(" AND source = ");
+    query_builder.push_bind(params.source.unwrap_or(OrderSource::Web).as_str());
+
+    if let Some(created_by) = params.created_by_user_id {
+        query_builder.push(" AND created_by_user_id = ");
+        query_builder.push_bind(created_by);
+    }
+
+    if let Some(payment_method) = params.payment_method {
+        query_builder.push(" AND payment_method = ");
+        query_builder.push_bind(payment_method.as_str());
+    }
+
     if let Some(from_date) = params.from_date {
         query_builder.push(" AND created_at >= ");
         query_builder.push_bind(from_date);
@@ -431,14 +462,21 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         items_map.entry(item.order_id).or_default().push(item);
     }
 
+    let creator_ids: Vec<i32> = orders.iter().filter_map(|o| o.created_by_user_id).collect();
+    let creators = get_order_creators(pool, &creator_ids).await?;
+
     let orders = orders
         .into_iter()
         .map(|order| {
             let items = items_map.remove(&order.id).unwrap_or_default();
+            let created_by = order
+                .created_by_user_id
+                .and_then(|id| creators.get(&id).cloned());
             crate::models::OrderResponse {
                 order,
                 items,
                 comment_images: Vec::new(),
+                created_by,
             }
         })
         .collect();

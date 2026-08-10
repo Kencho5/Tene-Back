@@ -5,7 +5,7 @@ use crate::{
     error::Result,
     models::{
         AdminOrderRequest, CheckoutRequest, CustomerInfo, Order, OrderCommentImage, OrderItem,
-        OrderItemData,
+        OrderItemData, OrderSource,
     },
 };
 use uuid::Uuid;
@@ -141,6 +141,7 @@ pub async fn create_admin_order(
     order_id: &str,
     amount: i32,
     status: &str,
+    created_by_user_id: i32,
     req: &AdminOrderRequest,
     items: &[OrderItemData],
 ) -> Result<Order> {
@@ -157,8 +158,9 @@ pub async fn create_admin_order(
     let order = sqlx::query_as::<_, Order>(
         "INSERT INTO orders (user_id, order_id, amount, status, customer_type, customer_name, customer_surname,
          organization_type, organization_name, organization_code, email, phone_number, address,
-         city, region, details, delivery_type, delivery_time, comment)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         city, region, details, delivery_type, delivery_time, comment,
+         source, created_by_user_id, payment_method)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
          RETURNING *",
     )
     .bind(req.user_id)
@@ -180,6 +182,9 @@ pub async fn create_admin_order(
     .bind(req.delivery_type.as_deref().unwrap_or(""))
     .bind(req.delivery_time.as_deref().unwrap_or(""))
     .bind(req.comment.as_deref())
+    .bind(OrderSource::Admin.as_str())
+    .bind(created_by_user_id)
+    .bind(req.payment_method.map(|m| m.as_str()))
     .fetch_one(&mut *tx)
     .await?;
 

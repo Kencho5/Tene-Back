@@ -1,5 +1,5 @@
 use axum::{
-    Json,
+    Extension, Json,
     extract::{Path, Query, State},
 };
 
@@ -17,6 +17,7 @@ use crate::{
         flitt_service,
         image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
     },
+    utils::jwt::Claims,
 };
 
 fn resolve_discount(
@@ -1151,6 +1152,9 @@ pub async fn export_orders(
         "მიწოდების დრო",
         "კომენტარი",
         "პროდუქტები",
+        "გადახდის ფორმა",
+        "წყარო",
+        "ვინ დაამატა",
         "შექმნის თარიღი",
     ];
     for (col, title) in headers.iter().enumerate() {
@@ -1186,7 +1190,19 @@ pub async fn export_orders(
             .collect::<Vec<_>>()
             .join(", ");
 
-        let cells: [String; 15] = [
+        let payment_method = match order.payment_method.as_deref() {
+            Some("pos") => "პოს ტერმინალი",
+            Some("cash") => "ქეში",
+            Some("transfer") => "ჩარიცხვა",
+            _ => "",
+        };
+
+        let source = match order.source.as_str() {
+            "admin" => "ხელით დამატებული",
+            _ => "საიტი",
+        };
+
+        let cells: [String; 18] = [
             order.id.to_string(),
             order.order_id.clone(),
             order.status.clone(),
@@ -1201,6 +1217,12 @@ pub async fn export_orders(
             order.delivery_time.clone(),
             order.comment.clone().unwrap_or_default(),
             items,
+            payment_method.to_string(),
+            source.to_string(),
+            o.created_by
+                .as_ref()
+                .map(|c| c.name.clone())
+                .unwrap_or_default(),
             order.created_at.format("%Y-%m-%d %H:%M:%S").to_string(),
         ];
 
@@ -1231,6 +1253,7 @@ pub async fn export_orders(
 
 pub async fn create_order(
     State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
     Json(payload): Json<AdminOrderRequest>,
 ) -> Result<Json<OrderResponse>> {
     let product_ids: Vec<String> = payload
@@ -1320,6 +1343,7 @@ pub async fn create_order(
         &order_id,
         amount_tetri,
         status,
+        claims.user_id,
         &payload,
         &order_items,
     )
@@ -1339,6 +1363,11 @@ pub async fn create_order(
         order,
         items,
         comment_images,
+        created_by: Some(OrderCreator {
+            id: claims.user_id,
+            name: claims.name,
+            email: claims.email,
+        }),
     }))
 }
 
