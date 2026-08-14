@@ -14,7 +14,8 @@ use crate::{
     AppState,
     error::{AppError, Result, SESSION_EXPIRED},
     models::{
-        CableVariant, CheckoutAnalyticsEvent, CheckoutRequest, CheckoutResponse, CommentImage,
+        CableVariant, CheckoutAnalyticsEvent, CheckoutPaymentMethod, CheckoutRequest,
+        CheckoutResponse, CommentImage,
         CommentImageUploadUrl, CommentImageUrlRequest, CommentImageUrlResponse, OrderCommentImage,
         OrderItemData, OrderResponse,
     },
@@ -145,6 +146,7 @@ pub async fn checkout(
         user_id,
         &order_id,
         amount_tetri,
+        "pending",
         &payload,
         &order_items,
     )
@@ -157,6 +159,33 @@ pub async fn checkout(
             &payload.comment_image_uuids,
         )
         .await?;
+    }
+
+    if payload.payment_method == CheckoutPaymentMethod::CashOnDelivery {
+        let approved = order_queries::update_order_status_and_deduct_stock(
+            &state.db,
+            &order_id,
+            "approved",
+            None,
+        )
+        .await?;
+
+        match approved {
+            Some((order, true)) => {
+                send_order_emails(&state, &order).await;
+            }
+            _ => {
+                tracing::warn!("cash on delivery order {} could not be approved", order_id);
+                return Err(AppError::BadRequest(
+                    "შეკვეთის დადასტურება ვერ მოხერხდა, პროდუქტი აღარ არის მარაგში".to_string(),
+                ));
+            }
+        }
+
+        return Ok(Json(CheckoutResponse {
+            order_id,
+            checkout_url: None,
+        }));
     }
 
     let server_callback_url = format!("{}/payments/callback", state.backend_url);
@@ -177,8 +206,56 @@ pub async fn checkout(
 
     Ok(Json(CheckoutResponse {
         order_id,
-        checkout_url,
+        checkout_url: Some(checkout_url),
     }))
+}
+
+async fn send_order_emails(state: &AppState, order: &crate::models::Order) {
+    let items = match order_queries::get_items_for_orders(&state.db, &[order.id]).await {
+        Ok(items) => items,
+        Err(e) => {
+            tracing::error!(
+                "Failed to load items for confirmation email {}: {:?}",
+                order.order_id,
+                e
+            );
+            return;
+        }
+    };
+
+    if let Err(e) =
+        email_service::send_order_confirmation_email(&state.ses_client, order, &items).await
+    {
+        tracing::error!(
+            "Failed to send order confirmation for {}: {:?}",
+            order.order_id,
+            e
+        );
+    }
+
+    match admin_queries::get_operator_emails(&state.db).await {
+        Ok(operator_emails) => {
+            if let Err(e) = email_service::send_operator_order_notification(
+                &state.ses_client,
+                &operator_emails,
+                order,
+                &items,
+            )
+            .await
+            {
+                tracing::error!(
+                    "Failed to send operator notification for {}: {:?}",
+                    order.order_id,
+                    e
+                );
+            }
+        }
+        Err(e) => tracing::error!(
+            "Failed to load operator emails for {}: {:?}",
+            order.order_id,
+            e
+        ),
+    }
 }
 
 fn validate_checkout_request(payload: &CheckoutRequest) -> Result<()> {
@@ -411,52 +488,7 @@ pub async fn flitt_callback(
             if !stock_ok {
                 tracing::warn!("Insufficient stock for approved order {}", order_id);
             } else if order_status == "approved" {
-                match order_queries::get_items_for_orders(&state.db, &[order.id]).await {
-                    Ok(items) => {
-                        if let Err(e) = email_service::send_order_confirmation_email(
-                            &state.ses_client,
-                            &order,
-                            &items,
-                        )
-                        .await
-                        {
-                            tracing::error!(
-                                "Failed to send order confirmation for {}: {:?}",
-                                order_id,
-                                e
-                            );
-                        }
-
-                        match admin_queries::get_operator_emails(&state.db).await {
-                            Ok(operator_emails) => {
-                                if let Err(e) = email_service::send_operator_order_notification(
-                                    &state.ses_client,
-                                    &operator_emails,
-                                    &order,
-                                    &items,
-                                )
-                                .await
-                                {
-                                    tracing::error!(
-                                        "Failed to send operator notification for {}: {:?}",
-                                        order_id,
-                                        e
-                                    );
-                                }
-                            }
-                            Err(e) => tracing::error!(
-                                "Failed to load operator emails for {}: {:?}",
-                                order_id,
-                                e
-                            ),
-                        }
-                    }
-                    Err(e) => tracing::error!(
-                        "Failed to load items for confirmation email {}: {:?}",
-                        order_id,
-                        e
-                    ),
-                }
+                send_order_emails(&state, &order).await;
             }
             StatusCode::OK
         }

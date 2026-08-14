@@ -235,6 +235,23 @@ pub struct CheckoutRequest {
     pub items: Vec<CartItem>,
     #[serde(default)]
     pub comment_image_uuids: Vec<Uuid>,
+    pub payment_method: CheckoutPaymentMethod,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckoutPaymentMethod {
+    Card,
+    CashOnDelivery,
+}
+
+impl CheckoutPaymentMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CheckoutPaymentMethod::Card => "card",
+            CheckoutPaymentMethod::CashOnDelivery => "cash_on_delivery",
+        }
+    }
 }
 
 pub struct OrderItemData {
@@ -250,7 +267,7 @@ pub struct OrderItemData {
 #[derive(Debug, Serialize)]
 pub struct CheckoutResponse {
     pub order_id: String,
-    pub checkout_url: String,
+    pub checkout_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -265,6 +282,8 @@ pub enum PaymentMethod {
     TransferBog,
     TransferTbc,
     TransferExtra,
+    Card,
+    CashOnDelivery,
 }
 
 impl PaymentMethod {
@@ -279,6 +298,8 @@ impl PaymentMethod {
             PaymentMethod::TransferBog => "transfer_bog",
             PaymentMethod::TransferTbc => "transfer_tbc",
             PaymentMethod::TransferExtra => "transfer_extra",
+            PaymentMethod::Card => "card",
+            PaymentMethod::CashOnDelivery => "cash_on_delivery",
         }
     }
 }

@@ -21,6 +21,7 @@ pub struct OrderContact<'a> {
     pub delivery_type: &'a str,
     pub delivery_time: &'a str,
     pub comment: Option<&'a str>,
+    pub payment_method: Option<&'a str>,
 }
 
 pub async fn create_order_with_items(
@@ -28,6 +29,7 @@ pub async fn create_order_with_items(
     user_id: Option<i32>,
     order_id: &str,
     amount: i32,
+    status: &str,
     req: &CheckoutRequest,
     items: &[OrderItemData],
 ) -> Result<Order> {
@@ -42,8 +44,9 @@ pub async fn create_order_with_items(
         delivery_type: &req.delivery_type,
         delivery_time: &req.delivery_time,
         comment: req.comment.as_deref(),
+        payment_method: Some(req.payment_method.as_str()),
     };
-    create_order_with_items_raw(pool, user_id, order_id, amount, &contact, items).await
+    create_order_with_items_raw(pool, user_id, order_id, amount, status, &contact, items).await
 }
 
 pub async fn create_order_with_items_raw(
@@ -51,6 +54,7 @@ pub async fn create_order_with_items_raw(
     user_id: Option<i32>,
     order_id: &str,
     amount: i32,
+    status: &str,
     contact: &OrderContact<'_>,
     items: &[OrderItemData],
 ) -> Result<Order> {
@@ -81,15 +85,16 @@ pub async fn create_order_with_items_raw(
         };
 
     let order = sqlx::query_as::<_, Order>(
-        "INSERT INTO orders (user_id, order_id, amount, customer_type, customer_name, customer_surname,
+        "INSERT INTO orders (user_id, order_id, amount, status, customer_type, customer_name, customer_surname,
          organization_type, organization_name, organization_code, email, phone_number, address,
-         city, region, details, delivery_type, delivery_time, comment)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+         city, region, details, delivery_type, delivery_time, comment, payment_method)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
          RETURNING *",
     )
     .bind(user_id)
     .bind(order_id)
     .bind(amount)
+    .bind(status)
     .bind(customer_type)
     .bind(customer_name)
     .bind(customer_surname)
@@ -105,6 +110,7 @@ pub async fn create_order_with_items_raw(
     .bind(contact.delivery_type)
     .bind(contact.delivery_time)
     .bind(contact.comment)
+    .bind(contact.payment_method)
     .fetch_one(&mut *tx)
     .await?;
 

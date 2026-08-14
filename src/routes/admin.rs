@@ -1246,6 +1246,8 @@ pub async fn export_orders(
             Some("transfer_bog") => "ჩარიცხვა (BOG)",
             Some("transfer_tbc") => "ჩარიცხვა (TBC)",
             Some("transfer_extra") => "ჩარიცხვა (დამატებითი)",
+            Some("card") => "ბარათი",
+            Some("cash_on_delivery") => "გადახდა ადგილზე",
             _ => "",
         };
 
@@ -1473,6 +1475,7 @@ pub async fn create_payment_link(
         delivery_type: "",
         delivery_time: "",
         comment: payload.comment.as_deref(),
+        payment_method: Some(PaymentMethod::Card.as_str()),
     };
 
     order_queries::create_order_with_items_raw(
@@ -1480,6 +1483,7 @@ pub async fn create_payment_link(
         None,
         &order_id,
         amount_tetri,
+        "pending",
         &contact,
         &[],
     )
@@ -1503,7 +1507,7 @@ pub async fn create_payment_link(
 
     Ok(Json(CheckoutResponse {
         order_id,
-        checkout_url,
+        checkout_url: Some(checkout_url),
     }))
 }
 
