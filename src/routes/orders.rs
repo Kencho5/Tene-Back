@@ -329,7 +329,7 @@ async fn build_order_items(
             None => None,
         };
 
-        let price = item_price(product.price, product.discount, variant);
+        let price = item_price(product.price, product.discounted_price, variant);
         subtotal += price * Decimal::from(item.quantity);
 
         let cable_config_json = item
@@ -351,14 +351,18 @@ async fn build_order_items(
     Ok((order_items, subtotal))
 }
 
-fn item_price(base_price: Decimal, discount: Decimal, variant: Option<&CableVariant>) -> Decimal {
+fn item_price(
+    base_price: Decimal,
+    discounted_price: Option<Decimal>,
+    variant: Option<&CableVariant>,
+) -> Decimal {
     if let Some(v) = variant {
         return v.price;
     }
-    if discount > Decimal::ZERO {
-        return base_price * (Decimal::ONE - discount / Decimal::from(100));
+    match discounted_price {
+        Some(dp) if dp < base_price => dp,
+        _ => base_price,
     }
-    base_price
 }
 
 pub async fn flitt_callback(

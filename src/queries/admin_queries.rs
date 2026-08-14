@@ -22,10 +22,10 @@ pub async fn create_product(
     let product = sqlx::query_as::<_, Product>(
         r#"
         INSERT INTO products (
-            id, name, description, price, discount, quantity,
+            id, name, description, price, discount, discounted_price, quantity,
             specifications, brand_id, cable_type_id, warranty, videos, enabled
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
@@ -34,6 +34,7 @@ pub async fn create_product(
     .bind(&req.description)
     .bind(&req.price)
     .bind(req.discount.unwrap_or_else(|| rust_decimal::Decimal::ZERO))
+    .bind(&req.discounted_price)
     .bind(req.quantity.unwrap_or(0))
     .bind(
         req.specifications
@@ -65,14 +66,15 @@ pub async fn update_product(
             description = COALESCE($2, description),
             price = COALESCE($3, price),
             discount = COALESCE($4, discount),
-            specifications = COALESCE($5, specifications),
-            brand_id = COALESCE($6, brand_id),
-            cable_type_id = CASE WHEN $7 THEN $8 ELSE cable_type_id END,
-            warranty = COALESCE($9, warranty),
-            videos = COALESCE($10, videos),
-            enabled = COALESCE($11, enabled),
+            discounted_price = CASE WHEN $5 THEN $6 ELSE discounted_price END,
+            specifications = COALESCE($7, specifications),
+            brand_id = COALESCE($8, brand_id),
+            cable_type_id = CASE WHEN $9 THEN $10 ELSE cable_type_id END,
+            warranty = COALESCE($11, warranty),
+            videos = COALESCE($12, videos),
+            enabled = COALESCE($13, enabled),
             updated_at = NOW()
-        WHERE id = $12
+        WHERE id = $14
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
@@ -80,6 +82,8 @@ pub async fn update_product(
     .bind(&req.description)
     .bind(&req.price)
     .bind(&req.discount)
+    .bind(req.discount.is_some())
+    .bind(&req.discounted_price)
     .bind(&req.specifications)
     .bind(&req.brand_id)
     .bind(req.cable_type_id.is_some())

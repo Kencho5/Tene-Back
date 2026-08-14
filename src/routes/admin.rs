@@ -24,7 +24,7 @@ fn resolve_discount(
     price: Option<Decimal>,
     discount: Option<Decimal>,
     discounted_price: Option<Decimal>,
-) -> Result<Option<Decimal>> {
+) -> Result<Option<(Decimal, Option<Decimal>)>> {
     if discount.is_some() && discounted_price.is_some() {
         return Err(AppError::BadRequest(
             "discount და discounted_price ერთდროულად ვერ მიეთითება".to_string(),
@@ -37,7 +37,17 @@ fn resolve_discount(
                 "discount უნდა იყოს 0-დან 100-მდე".to_string(),
             ));
         }
-        return Ok(Some(d));
+        if d == Decimal::ZERO {
+            return Ok(Some((Decimal::ZERO, None)));
+        }
+        let p = price.ok_or_else(|| {
+            AppError::BadRequest("discount-ისთვის price აუცილებელია".to_string())
+        })?;
+        if p <= Decimal::ZERO {
+            return Err(AppError::BadRequest("price უნდა იყოს დადებითი".to_string()));
+        }
+        let dp = (p * (Decimal::ONE - d / Decimal::from(100))).round_dp(2);
+        return Ok(Some((discount_percent(p, dp), Some(dp))));
     }
 
     if let Some(dp) = discounted_price {
@@ -52,11 +62,18 @@ fn resolve_discount(
                 "discounted_price უნდა იყოს 0-დან price-მდე".to_string(),
             ));
         }
-        let pct = (p - dp) * Decimal::from(100) / p;
-        return Ok(Some(pct));
+        let dp = dp.round_dp(2);
+        if dp == p {
+            return Ok(Some((Decimal::ZERO, None)));
+        }
+        return Ok(Some((discount_percent(p, dp), Some(dp))));
     }
 
     Ok(None)
+}
+
+fn discount_percent(price: Decimal, discounted_price: Decimal) -> Decimal {
+    ((price - discounted_price) * Decimal::from(100) / price).round_dp(2)
 }
 
 fn detect_video_platform(url: &str) -> Option<VideoPlatform> {
@@ -127,7 +144,15 @@ pub async fn create_product(
         )));
     }
 
-    payload.discount = resolve_discount(payload.price, payload.discount, payload.discounted_price)?;
+    if let Some((discount, discounted_price)) =
+        resolve_discount(payload.price, payload.discount, payload.discounted_price)?
+    {
+        payload.discount = Some(discount);
+        payload.discounted_price = discounted_price;
+    } else {
+        payload.discount = None;
+        payload.discounted_price = None;
+    }
 
     if let Some(ref seo) = payload.seo {
         if let Some(ref slug) = seo.slug {
@@ -177,9 +202,30 @@ pub async fn update_product(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("პროდუქტი id-ით {} ვერ მოიძებნა", id)))?;
 
-    let effective_price = payload.price.or(Some(existing.price));
-    payload.discount =
-        resolve_discount(effective_price, payload.discount, payload.discounted_price)?;
+    let effective_price = payload.price.unwrap_or(existing.price);
+    match resolve_discount(
+        Some(effective_price),
+        payload.discount,
+        payload.discounted_price,
+    )? {
+        Some((discount, discounted_price)) => {
+            payload.discount = Some(discount);
+            payload.discounted_price = discounted_price;
+        }
+        None => {
+            payload.discount = match existing.discounted_price {
+                Some(dp) if dp < effective_price => {
+                    payload.discounted_price = Some(dp);
+                    Some(discount_percent(effective_price, dp))
+                }
+                Some(_) => {
+                    payload.discounted_price = None;
+                    Some(Decimal::ZERO)
+                }
+                None => None,
+            };
+        }
+    }
 
     if let Some(ref seo) = payload.seo {
         if let Some(ref slug) = seo.slug {
@@ -1287,7 +1333,12 @@ pub async fn create_order(
 
         let price = item
             .price
-            .or_else(|| product.map(|p| p.price))
+            .or_else(|| {
+                product.map(|p| match p.discounted_price {
+                    Some(dp) if dp < p.price => dp,
+                    _ => p.price,
+                })
+            })
             .unwrap_or(Decimal::ZERO);
 
         let product_name = item
