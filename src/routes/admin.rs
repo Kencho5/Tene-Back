@@ -1238,8 +1238,14 @@ pub async fn export_orders(
 
         let payment_method = match order.payment_method.as_deref() {
             Some("pos") => "პოს ტერმინალი",
+            Some("pos_bog") => "პოს ტერმინალი (BOG)",
+            Some("pos_tbc") => "პოს ტერმინალი (TBC)",
+            Some("pos_liberty") => "პოს ტერმინალი (Liberty)",
             Some("cash") => "ქეში",
             Some("transfer") => "ჩარიცხვა",
+            Some("transfer_bog") => "ჩარიცხვა (BOG)",
+            Some("transfer_tbc") => "ჩარიცხვა (TBC)",
+            Some("transfer_extra") => "ჩარიცხვა (დამატებითი)",
             _ => "",
         };
 

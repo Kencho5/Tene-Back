@@ -159,8 +159,9 @@ pub async fn create_admin_order(
         "INSERT INTO orders (user_id, order_id, amount, status, customer_type, customer_name, customer_surname,
          organization_type, organization_name, organization_code, email, phone_number, address,
          city, region, details, delivery_type, delivery_time, comment,
-         source, created_by_user_id, payment_method)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+         source, created_by_user_id, payment_method, fulfillment_method, personal_number,
+         source_comment, is_installment_sale, is_product_exchange)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
          RETURNING *",
     )
     .bind(req.user_id)
@@ -185,6 +186,11 @@ pub async fn create_admin_order(
     .bind(OrderSource::Admin.as_str())
     .bind(created_by_user_id)
     .bind(req.payment_method.map(|m| m.as_str()))
+    .bind(req.fulfillment_method.map(|m| m.as_str()))
+    .bind(req.personal_number.as_deref())
+    .bind(req.source_comment.as_deref())
+    .bind(req.is_installment_sale)
+    .bind(req.is_product_exchange)
     .fetch_one(&mut *tx)
     .await?;
 

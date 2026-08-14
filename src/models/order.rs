@@ -111,6 +111,11 @@ pub struct Order {
     pub source: String,
     pub created_by_user_id: Option<i32>,
     pub payment_method: Option<String>,
+    pub fulfillment_method: Option<String>,
+    pub personal_number: Option<String>,
+    pub source_comment: Option<String>,
+    pub is_installment_sale: bool,
+    pub is_product_exchange: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -252,16 +257,44 @@ pub struct CheckoutResponse {
 #[serde(rename_all = "snake_case")]
 pub enum PaymentMethod {
     Pos,
+    PosBog,
+    PosTbc,
+    PosLiberty,
     Cash,
     Transfer,
+    TransferBog,
+    TransferTbc,
+    TransferExtra,
 }
 
 impl PaymentMethod {
     pub fn as_str(&self) -> &'static str {
         match self {
             PaymentMethod::Pos => "pos",
+            PaymentMethod::PosBog => "pos_bog",
+            PaymentMethod::PosTbc => "pos_tbc",
+            PaymentMethod::PosLiberty => "pos_liberty",
             PaymentMethod::Cash => "cash",
             PaymentMethod::Transfer => "transfer",
+            PaymentMethod::TransferBog => "transfer_bog",
+            PaymentMethod::TransferTbc => "transfer_tbc",
+            PaymentMethod::TransferExtra => "transfer_extra",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FulfillmentMethod {
+    StorePickup,
+    Courier,
+}
+
+impl FulfillmentMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            FulfillmentMethod::StorePickup => "store_pickup",
+            FulfillmentMethod::Courier => "courier",
         }
     }
 }
@@ -338,6 +371,16 @@ pub struct AdminOrderRequest {
     pub user_id: Option<i32>,
     #[serde(default)]
     pub payment_method: Option<PaymentMethod>,
+    #[serde(default)]
+    pub fulfillment_method: Option<FulfillmentMethod>,
+    #[serde(default)]
+    pub personal_number: Option<String>,
+    #[serde(default)]
+    pub source_comment: Option<String>,
+    #[serde(default)]
+    pub is_installment_sale: bool,
+    #[serde(default)]
+    pub is_product_exchange: bool,
     #[serde(default)]
     pub items: Vec<AdminOrderItemRequest>,
     #[serde(default)]
