@@ -128,7 +128,14 @@ pub async fn checkout(
         payload.region.as_deref(),
     )?;
 
-    let amount_tetri = ((subtotal + delivery) * Decimal::from(100))
+    let cash_on_delivery_fee =
+        if payload.payment_method == CheckoutPaymentMethod::CashOnDelivery {
+            delivery_service::calculate_cash_on_delivery_fee(subtotal)
+        } else {
+            Decimal::ZERO
+        };
+
+    let amount_tetri = ((subtotal + delivery + cash_on_delivery_fee) * Decimal::from(100))
         .trunc()
         .to_i32()
         .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;

@@ -27,6 +27,18 @@ fn tbilisi_express_price(region: Option<&str>) -> Decimal {
     }
 }
 
+const CASH_ON_DELIVERY_THRESHOLD: Decimal = dec!(60);
+const CASH_ON_DELIVERY_FLAT_FEE: Decimal = dec!(3);
+const CASH_ON_DELIVERY_RATE: Decimal = dec!(0.05);
+
+pub fn calculate_cash_on_delivery_fee(subtotal: Decimal) -> Decimal {
+    if subtotal <= CASH_ON_DELIVERY_THRESHOLD {
+        CASH_ON_DELIVERY_FLAT_FEE
+    } else {
+        (subtotal * CASH_ON_DELIVERY_RATE).round_dp(2)
+    }
+}
+
 pub fn calculate_delivery(
     delivery_type: &str,
     delivery_time: &str,
