@@ -927,12 +927,12 @@ pub async fn get_checkout_sessions(
                 MAX(step_index) AS last_step_index,
                 COUNT(*) AS event_count,
                 MIN(created_at) AS started_at,
-                MAX(created_at) AS last_activity_at,
-                COUNT(*) OVER() AS total_count
+                MAX(created_at) AS last_activity_at
             FROM checkout_analytics
             GROUP BY session_id
-        )
-        SELECT * FROM sessions WHERE 1=1",
+        ),
+        filtered AS (
+            SELECT * FROM sessions WHERE 1=1",
     );
 
     if let Some(session_id) = params.session_id {
@@ -957,6 +957,11 @@ pub async fn get_checkout_sessions(
         }
         _ => {}
     }
+
+    qb.push(
+        ")
+        SELECT *, COUNT(*) OVER() AS total_count FROM filtered",
+    );
 
     qb.push(" ORDER BY last_activity_at DESC LIMIT ");
     qb.push_bind(limit);
