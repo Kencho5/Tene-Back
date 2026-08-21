@@ -109,12 +109,10 @@ impl AppConfig {
                     .map_err(|_| {
                         AppError::ConfigError("Invalid FLITT_MERCHANT_ID value".to_string())
                     })?,
-                secret_key: env::var("FLITT_SECRET_KEY").map_err(|_| {
-                    AppError::ConfigError("FLITT_SECRET_KEY not set".to_string())
-                })?,
-                backend_url: env::var("BACKEND_URL").map_err(|_| {
-                    AppError::ConfigError("BACKEND_URL not set".to_string())
-                })?,
+                secret_key: env::var("FLITT_SECRET_KEY")
+                    .map_err(|_| AppError::ConfigError("FLITT_SECRET_KEY not set".to_string()))?,
+                backend_url: env::var("BACKEND_URL")
+                    .map_err(|_| AppError::ConfigError("BACKEND_URL not set".to_string()))?,
             },
             environment,
         })

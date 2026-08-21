@@ -22,7 +22,9 @@ pub async fn register_user(
         .await?
         .is_some()
     {
-        return Err(AppError::Conflict("ელფოსტა უკვე რეგისტრირებულია".to_string()));
+        return Err(AppError::Conflict(
+            "ელფოსტა უკვე რეგისტრირებულია".to_string(),
+        ));
     }
 
     let code = rand::rng().random_range(100000..999999);
@@ -52,7 +54,9 @@ pub async fn verify_and_register(
         .await?
         .is_some()
     {
-        return Err(AppError::Conflict("ელფოსტა უკვე რეგისტრირებულია".to_string()));
+        return Err(AppError::Conflict(
+            "ელფოსტა უკვე რეგისტრირებულია".to_string(),
+        ));
     }
 
     let verification = email_queries::find_valid_code(&state.db, &payload.email, payload.code)
@@ -82,11 +86,15 @@ pub async fn verify_and_register(
 
 fn validate_registration(payload: &RegisterRequest) -> Result<()> {
     if payload.email.is_empty() || !payload.email.contains('@') {
-        return Err(AppError::BadRequest("არასწორი ელფოსტის მისამართი".to_string()));
+        return Err(AppError::BadRequest(
+            "არასწორი ელფოსტის მისამართი".to_string(),
+        ));
     }
 
     if payload.name.trim().is_empty() {
-        return Err(AppError::BadRequest("სახელი არ შეიძლება იყოს ცარიელი".to_string()));
+        return Err(AppError::BadRequest(
+            "სახელი არ შეიძლება იყოს ცარიელი".to_string(),
+        ));
     }
 
     if payload.password.len() < 4 {

@@ -51,10 +51,7 @@ pub async fn delete_objects_by_prefix(
     let mut continuation_token: Option<String> = None;
 
     loop {
-        let mut list_request = client
-            .list_objects_v2()
-            .bucket(bucket)
-            .prefix(prefix);
+        let mut list_request = client.list_objects_v2().bucket(bucket).prefix(prefix);
 
         if let Some(token) = continuation_token {
             list_request = list_request.continuation_token(token);

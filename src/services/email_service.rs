@@ -14,10 +14,17 @@ pub async fn send_verification_email(
     code: i32,
     sender_email: &str,
 ) -> Result<()> {
-    let html = include_str!("../utils/code.html")
-        .replace("{{verification_code}}", &code.to_string());
+    let html =
+        include_str!("../utils/code.html").replace("{{verification_code}}", &code.to_string());
 
-    send_email(ses_client, sender_email, recipient, "Verify Your Email", &html).await
+    send_email(
+        ses_client,
+        sender_email,
+        recipient,
+        "Verify Your Email",
+        &html,
+    )
+    .await
 }
 
 pub async fn send_order_confirmation_email(
@@ -79,7 +86,11 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
         }
         let meta = meta_parts.join(" · ");
 
-        let unit_price = format!("{} ₾ × {}", format_money(item.price_at_purchase), item.quantity);
+        let unit_price = format!(
+            "{} ₾ × {}",
+            format_money(item.price_at_purchase),
+            item.quantity
+        );
 
         rows.push_str(&format!(
             "<tr>\
@@ -241,7 +252,9 @@ fn translate_org_type(t: &str) -> &str {
 
 fn format_created_at(dt: &chrono::DateTime<chrono::Utc>) -> String {
     let tbilisi = chrono::FixedOffset::east_opt(4 * 3600).unwrap();
-    dt.with_timezone(&tbilisi).format("%d.%m.%Y %H:%M").to_string()
+    dt.with_timezone(&tbilisi)
+        .format("%d.%m.%Y %H:%M")
+        .to_string()
 }
 
 fn format_money(amount: Decimal) -> String {
@@ -283,7 +296,9 @@ async fn send_email(
         .build()
         .map_err(|e| AppError::InternalError(format!("HTML ტექსტის აგება ვერ მოხერხდა: {}", e)))?;
 
-    let body = aws_sdk_sesv2::types::Body::builder().html(html_body).build();
+    let body = aws_sdk_sesv2::types::Body::builder()
+        .html(html_body)
+        .build();
 
     let message = aws_sdk_sesv2::types::Message::builder()
         .subject(subject)

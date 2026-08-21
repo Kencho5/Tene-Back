@@ -3,13 +3,8 @@ use rust_decimal::{Decimal, dec};
 use crate::error::{AppError, Result};
 
 const TBILISI: &str = "tbilisi";
-const HIGH_MOUNTAIN_CITIES: &[&str] = &[
-    "svaneti",
-    "racha",
-    "khevsureti",
-    "tusheti",
-    "zemo-acshara",
-];
+const HIGH_MOUNTAIN_CITIES: &[&str] =
+    &["svaneti", "racha", "khevsureti", "tusheti", "zemo-acshara"];
 
 const TBILISI_EXPRESS_NEAR: Decimal = dec!(15);
 const TBILISI_EXPRESS_FAR: Decimal = dec!(25);

@@ -48,7 +48,13 @@ pub async fn google_auth(
             user_queries::create_google_user(&state.db, email, name, google_id).await?
         };
 
-    let token = jwt::generate_token(user.id, &user.email, &user.name, user.role, chrono::Duration::days(30))?;
+    let token = jwt::generate_token(
+        user.id,
+        &user.email,
+        &user.name,
+        user.role,
+        chrono::Duration::days(30),
+    )?;
 
     Ok(Json(AuthResponse { token }))
 }

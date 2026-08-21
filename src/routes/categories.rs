@@ -1,10 +1,10 @@
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 use crate::{
+    AppState,
     error::Result,
     models::{CategoryResponse, CategoryResponseWithChildren, CategoryTreeResponse},
     queries::category_queries,
-    AppState,
 };
 
 pub async fn get_category_tree(
@@ -12,10 +12,7 @@ pub async fn get_category_tree(
 ) -> Result<Json<CategoryTreeResponse>> {
     let tree = category_queries::get_category_tree(&state.db, true).await?;
 
-    fn collect_ids(
-        nodes: &[crate::models::CategoryWithChildren],
-        ids: &mut Vec<i32>,
-    ) {
+    fn collect_ids(nodes: &[crate::models::CategoryWithChildren], ids: &mut Vec<i32>) {
         for node in nodes {
             ids.push(node.category.id);
             collect_ids(&node.children, ids);

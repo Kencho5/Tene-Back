@@ -1,4 +1,4 @@
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::env;
 
@@ -15,7 +15,13 @@ pub struct Claims {
     pub exp: usize,
 }
 
-pub fn generate_token(user_id: i32, email: &str, name: &str, role: UserRole, duration: chrono::Duration) -> Result<String> {
+pub fn generate_token(
+    user_id: i32,
+    email: &str,
+    name: &str,
+    role: UserRole,
+    duration: chrono::Duration,
+) -> Result<String> {
     let jwt_secret = env::var("JWT_SECRET")
         .map_err(|_| AppError::ConfigError("JWT_SECRET not set".to_string()))?;
 

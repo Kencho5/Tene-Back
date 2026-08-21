@@ -92,10 +92,7 @@ pub async fn get_product_categories(pool: &PgPool, product_id: &str) -> Result<V
     Ok(categories)
 }
 
-pub async fn create_category(
-    pool: &PgPool,
-    req: CreateCategoryRequest,
-) -> Result<Category> {
+pub async fn create_category(pool: &PgPool, req: CreateCategoryRequest) -> Result<Category> {
     let category = sqlx::query_as::<_, Category>(
         "INSERT INTO categories (parent_id, name, slug, description, display_order, enabled)
          VALUES ($1, $2, $3, $4, $5, $6)
@@ -265,10 +262,7 @@ pub async fn get_category_facets(
     Ok(facets)
 }
 
-pub async fn get_category_image(
-    pool: &PgPool,
-    category_id: i32,
-) -> Result<Option<CategoryImage>> {
+pub async fn get_category_image(pool: &PgPool, category_id: i32) -> Result<Option<CategoryImage>> {
     let image = sqlx::query_as::<_, CategoryImage>(
         "SELECT * FROM category_images WHERE category_id = $1 LIMIT 1",
     )
@@ -332,13 +326,12 @@ pub async fn delete_category_image(
     category_id: i32,
     image_uuid: Uuid,
 ) -> Result<bool> {
-    let result = sqlx::query(
-        "DELETE FROM category_images WHERE category_id = $1 AND image_uuid = $2",
-    )
-    .bind(category_id)
-    .bind(image_uuid)
-    .execute(pool)
-    .await?;
+    let result =
+        sqlx::query("DELETE FROM category_images WHERE category_id = $1 AND image_uuid = $2")
+            .bind(category_id)
+            .bind(image_uuid)
+            .execute(pool)
+            .await?;
 
     Ok(result.rows_affected() > 0)
 }

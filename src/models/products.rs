@@ -223,4 +223,3 @@ pub struct ProductFacets {
     pub colors: Vec<FacetValue>,
     pub categories: Vec<CategoryFacetValue>,
 }
-

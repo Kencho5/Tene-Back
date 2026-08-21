@@ -15,9 +15,8 @@ use crate::{
     error::{AppError, Result, SESSION_EXPIRED},
     models::{
         CableVariant, CheckoutAnalyticsEvent, CheckoutPaymentMethod, CheckoutRequest,
-        CheckoutResponse, CommentImage,
-        CommentImageUploadUrl, CommentImageUrlRequest, CommentImageUrlResponse, OrderCommentImage,
-        OrderItemData, OrderResponse,
+        CheckoutResponse, CommentImage, CommentImageUploadUrl, CommentImageUrlRequest,
+        CommentImageUrlResponse, OrderCommentImage, OrderItemData, OrderResponse,
     },
     queries::{admin_queries, order_queries, products_queries, user_queries},
     services::{delivery_service, email_service, flitt_service, image_url_service},
@@ -65,7 +64,9 @@ pub async fn generate_comment_image_urls(
     Json(payload): Json<CommentImageUrlRequest>,
 ) -> Result<Json<CommentImageUrlResponse>> {
     if payload.images.is_empty() {
-        return Err(AppError::BadRequest("სურათები არ არის მითითებული".to_string()));
+        return Err(AppError::BadRequest(
+            "სურათები არ არის მითითებული".to_string(),
+        ));
     }
     if payload.images.len() > MAX_COMMENT_IMAGES {
         return Err(AppError::BadRequest(format!(
@@ -128,12 +129,11 @@ pub async fn checkout(
         payload.region.as_deref(),
     )?;
 
-    let cash_on_delivery_fee =
-        if payload.payment_method == CheckoutPaymentMethod::CashOnDelivery {
-            delivery_service::calculate_cash_on_delivery_fee(subtotal)
-        } else {
-            Decimal::ZERO
-        };
+    let cash_on_delivery_fee = if payload.payment_method == CheckoutPaymentMethod::CashOnDelivery {
+        delivery_service::calculate_cash_on_delivery_fee(subtotal)
+    } else {
+        Decimal::ZERO
+    };
 
     let amount_tetri = ((subtotal + delivery + cash_on_delivery_fee) * Decimal::from(100))
         .trunc()
@@ -160,20 +160,13 @@ pub async fn checkout(
     .await?;
 
     if !payload.comment_image_uuids.is_empty() {
-        order_queries::attach_comment_images(
-            &state.db,
-            order.id,
-            &payload.comment_image_uuids,
-        )
-        .await?;
+        order_queries::attach_comment_images(&state.db, order.id, &payload.comment_image_uuids)
+            .await?;
     }
 
     if payload.payment_method == CheckoutPaymentMethod::CashOnDelivery {
         let approved = order_queries::update_order_status_and_deduct_stock(
-            &state.db,
-            &order_id,
-            "approved",
-            None,
+            &state.db, &order_id, "approved", None,
         )
         .await?;
 
@@ -395,10 +388,7 @@ async fn build_order_items(
         let variant = match &item.cable_config {
             Some(cfg) => {
                 let cable_type_id = product.cable_type_id.ok_or_else(|| {
-                    AppError::BadRequest(format!(
-                        "პროდუქტი {} არ არის კაბელი",
-                        item.product_id
-                    ))
+                    AppError::BadRequest(format!("პროდუქტი {} არ არის კაბელი", item.product_id))
                 })?;
                 let v = cable_variants
                     .get(&(cable_type_id, cfg.watts, cfg.length_cm))
@@ -422,7 +412,7 @@ async fn build_order_items(
             .map(|c| json!({ "watts": c.watts, "length_cm": c.length_cm }));
 
         order_items.push(OrderItemData {
-            product_id: item.product_id.clone(),
+            product_id: Some(item.product_id.clone()),
             color: item.color.clone(),
             quantity: item.quantity,
             price,
@@ -614,8 +604,10 @@ pub async fn get_orders(
         .into_iter()
         .map(|order| {
             let items = items_map.remove(&order.id).unwrap_or_default();
-            let comment_images =
-                build_comment_images(&state, comment_images_map.remove(&order.id).unwrap_or_default());
+            let comment_images = build_comment_images(
+                &state,
+                comment_images_map.remove(&order.id).unwrap_or_default(),
+            );
             OrderResponse {
                 order,
                 items,

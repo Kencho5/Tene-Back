@@ -50,7 +50,9 @@ pub async fn verify_code(
 
 fn validate_email(email: &str) -> Result<()> {
     if email.is_empty() || !email.contains('@') {
-        return Err(AppError::BadRequest("არასწორი ელფოსტის მისამართი".to_string()));
+        return Err(AppError::BadRequest(
+            "არასწორი ელფოსტის მისამართი".to_string(),
+        ));
     }
     Ok(())
 }

@@ -6,11 +6,10 @@ use crate::{
         AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
         CableVariant, CableVariantRequest, CableVariantUpdate, CartSnapshotItem, CheckoutEventRow,
         CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
-        HighViewsLowSales, MostViewedProduct, Order, OrderCreator,
-        OrderQuery, OrderSearchResponse, OrderSource, Product, ProductImage, ProductRequest, ProductSeo,
-        ProductSeoRequest, TrendingProduct,
-        UniqueViewersProduct, UserQuery, UserRequest, UserResponse, UserSearchResponse,
-        ViewsByHour,
+        HighViewsLowSales, MostViewedProduct, Order, OrderCreator, OrderQuery, OrderSearchResponse,
+        OrderSource, Product, ProductImage, ProductRequest, ProductSeo, ProductSeoRequest,
+        TrendingProduct, UniqueViewersProduct, UserQuery, UserRequest, UserResponse,
+        UserSearchResponse, ViewsByHour,
     },
 };
 
@@ -107,23 +106,19 @@ pub async fn get_brands(pool: &PgPool) -> Result<Vec<Brand>> {
 }
 
 pub async fn create_brand(pool: &PgPool, name: &str) -> Result<Brand> {
-    let brand = sqlx::query_as::<_, Brand>(
-        "INSERT INTO brands (name) VALUES ($1) RETURNING *",
-    )
-    .bind(name)
-    .fetch_one(pool)
-    .await?;
+    let brand = sqlx::query_as::<_, Brand>("INSERT INTO brands (name) VALUES ($1) RETURNING *")
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
     Ok(brand)
 }
 
 pub async fn update_brand(pool: &PgPool, id: i32, name: &str) -> Result<Brand> {
-    let brand = sqlx::query_as::<_, Brand>(
-        "UPDATE brands SET name = $1 WHERE id = $2 RETURNING *",
-    )
-    .bind(name)
-    .bind(id)
-    .fetch_one(pool)
-    .await?;
+    let brand = sqlx::query_as::<_, Brand>("UPDATE brands SET name = $1 WHERE id = $2 RETURNING *")
+        .bind(name)
+        .bind(id)
+        .fetch_one(pool)
+        .await?;
     Ok(brand)
 }
 
@@ -308,11 +303,9 @@ pub async fn update_user(pool: &PgPool, id: i32, req: &UserRequest) -> Result<Us
 }
 
 pub async fn get_operator_emails(pool: &PgPool) -> Result<Vec<String>> {
-    let emails = sqlx::query_scalar::<_, String>(
-        "SELECT email FROM users WHERE role = 'operator'",
-    )
-    .fetch_all(pool)
-    .await?;
+    let emails = sqlx::query_scalar::<_, String>("SELECT email FROM users WHERE role = 'operator'")
+        .fetch_all(pool)
+        .await?;
 
     Ok(emails)
 }
@@ -326,11 +319,7 @@ pub async fn delete_user(pool: &PgPool, id: i32) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
-pub async fn update_order_status(
-    pool: &PgPool,
-    id: i32,
-    status: &str,
-) -> Result<Option<Order>> {
+pub async fn update_order_status(pool: &PgPool, id: i32, status: &str) -> Result<Option<Order>> {
     let order = sqlx::query_as::<_, Order>(
         "UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
     )
@@ -349,12 +338,11 @@ pub async fn get_order_creators(
         return Ok(std::collections::HashMap::new());
     }
 
-    let creators = sqlx::query_as::<_, OrderCreator>(
-        "SELECT id, name, email FROM users WHERE id = ANY($1)",
-    )
-    .bind(user_ids)
-    .fetch_all(pool)
-    .await?;
+    let creators =
+        sqlx::query_as::<_, OrderCreator>("SELECT id, name, email FROM users WHERE id = ANY($1)")
+            .bind(user_ids)
+            .fetch_all(pool)
+            .await?;
 
     Ok(creators.into_iter().map(|c| (c.id, c)).collect())
 }
@@ -373,7 +361,12 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(id);
     }
 
-    if let Some(search) = params.search.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+    if let Some(search) = params
+        .search
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         query_builder.push(" AND (");
         if let Ok(search_id) = search.parse::<i32>() {
             query_builder.push("id = ");
@@ -520,37 +513,32 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
         None => ("", "", ""),
     };
 
-    let most_viewed = sqlx::query_as::<_, MostViewedProduct>(
-        &format!(
-            "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
+    let most_viewed = sqlx::query_as::<_, MostViewedProduct>(&format!(
+        "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
              FROM product_views pv
              JOIN products p ON p.id = pv.product_id
              {where_pv}
              GROUP BY pv.product_id, p.name
              ORDER BY views DESC
              LIMIT 10"
-        ),
-    )
+    ))
     .fetch_all(pool)
     .await?;
 
-    let trending_this_week = sqlx::query_as::<_, TrendingProduct>(
-        &format!(
-            "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
+    let trending_this_week = sqlx::query_as::<_, TrendingProduct>(&format!(
+        "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
              FROM product_views pv
              JOIN products p ON p.id = pv.product_id
              WHERE pv.viewed_at >= CURRENT_DATE - INTERVAL '7 days'
              GROUP BY pv.product_id, p.name
              ORDER BY views DESC
              LIMIT 10"
-        ),
-    )
+    ))
     .fetch_all(pool)
     .await?;
 
-    let unique_viewers = sqlx::query_as::<_, UniqueViewersProduct>(
-        &format!(
-            "SELECT pv.product_id, p.name as product_name,
+    let unique_viewers = sqlx::query_as::<_, UniqueViewersProduct>(&format!(
+        "SELECT pv.product_id, p.name as product_name,
                     COUNT(DISTINCT pv.user_id) as logged_in_viewers,
                     COUNT(*) FILTER (WHERE pv.user_id IS NULL) as anonymous_views,
                     COUNT(*) as total_views
@@ -560,26 +548,22 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              GROUP BY pv.product_id, p.name
              ORDER BY total_views DESC
              LIMIT 10"
-        ),
-    )
+    ))
     .fetch_all(pool)
     .await?;
 
-    let views_by_hour = sqlx::query_as::<_, ViewsByHour>(
-        &format!(
-            "SELECT EXTRACT(HOUR FROM viewed_at) as hour, COUNT(*) as views
+    let views_by_hour = sqlx::query_as::<_, ViewsByHour>(&format!(
+        "SELECT EXTRACT(HOUR FROM viewed_at) as hour, COUNT(*) as views
              FROM product_views
              {where_bare}
              GROUP BY hour
              ORDER BY hour"
-        ),
-    )
+    ))
     .fetch_all(pool)
     .await?;
 
-    let high_views_low_sales = sqlx::query_as::<_, HighViewsLowSales>(
-        &format!(
-            "SELECT p.id as product_id, p.name as product_name,
+    let high_views_low_sales = sqlx::query_as::<_, HighViewsLowSales>(&format!(
+        "SELECT p.id as product_id, p.name as product_name,
                     COUNT(pv.id) as views,
                     COALESCE(SUM(oi.quantity), 0) as sold
              FROM products p
@@ -589,8 +573,7 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              HAVING COUNT(pv.id) > 0 AND COALESCE(SUM(oi.quantity), 0) = 0
              ORDER BY views DESC
              LIMIT 10"
-        ),
-    )
+    ))
     .fetch_all(pool)
     .await?;
 
@@ -599,16 +582,17 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
         Some(AnalyticsPeriod::Yesterday) => {
             "WHERE o.created_at >= CURRENT_DATE - INTERVAL '1 day' AND o.created_at < CURRENT_DATE"
         }
-        Some(AnalyticsPeriod::Last7Days) => "WHERE o.created_at >= CURRENT_DATE - INTERVAL '7 days'",
+        Some(AnalyticsPeriod::Last7Days) => {
+            "WHERE o.created_at >= CURRENT_DATE - INTERVAL '7 days'"
+        }
         Some(AnalyticsPeriod::Last30Days) => {
             "WHERE o.created_at >= CURRENT_DATE - INTERVAL '30 days'"
         }
         None => "",
     };
 
-    let conversion_rates = sqlx::query_as::<_, ConversionRate>(
-        &format!(
-            "WITH view_counts AS (
+    let conversion_rates = sqlx::query_as::<_, ConversionRate>(&format!(
+        "WITH view_counts AS (
                  SELECT product_id, COUNT(*) as views
                  FROM product_views
                  {where_bare}
@@ -633,13 +617,12 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              WHERE vc.views > 0
              ORDER BY conversion_pct DESC, viewers DESC
              LIMIT 10",
-            and_approved = if where_orders.is_empty() {
-                "WHERE o.status = 'approved'"
-            } else {
-                "AND o.status = 'approved'"
-            },
-        ),
-    )
+        and_approved = if where_orders.is_empty() {
+            "WHERE o.status = 'approved'"
+        } else {
+            "AND o.status = 'approved'"
+        },
+    ))
     .fetch_all(pool)
     .await?;
 
@@ -678,12 +661,11 @@ pub async fn find_cable_type_by_name(pool: &PgPool, name: &str) -> Result<Option
 }
 
 pub async fn create_cable_type(pool: &PgPool, req: &CableTypeRequest) -> Result<CableType> {
-    let t = sqlx::query_as::<_, CableType>(
-        "INSERT INTO cable_types (name) VALUES ($1) RETURNING *",
-    )
-    .bind(&req.name)
-    .fetch_one(pool)
-    .await?;
+    let t =
+        sqlx::query_as::<_, CableType>("INSERT INTO cable_types (name) VALUES ($1) RETURNING *")
+            .bind(&req.name)
+            .fetch_one(pool)
+            .await?;
     Ok(t)
 }
 
@@ -724,10 +706,7 @@ pub async fn get_cable_variants_by_type(
     Ok(variants)
 }
 
-pub async fn find_cable_variant_by_id(
-    pool: &PgPool,
-    id: i32,
-) -> Result<Option<CableVariant>> {
+pub async fn find_cable_variant_by_id(pool: &PgPool, id: i32) -> Result<Option<CableVariant>> {
     let v = sqlx::query_as::<_, CableVariant>("SELECT * FROM cable_variants WHERE id = $1")
         .bind(id)
         .fetch_optional(pool)
@@ -844,10 +823,7 @@ pub async fn get_product_seo(pool: &PgPool, product_id: &str) -> Result<Option<P
     Ok(seo)
 }
 
-pub async fn find_product_seo_by_slug(
-    pool: &PgPool,
-    slug: &str,
-) -> Result<Option<String>> {
+pub async fn find_product_seo_by_slug(pool: &PgPool, slug: &str) -> Result<Option<String>> {
     let row: Option<(String,)> =
         sqlx::query_as("SELECT product_id FROM product_seo WHERE slug = $1")
             .bind(slug)
@@ -999,12 +975,11 @@ pub async fn get_checkout_sessions(
     .await?;
 
     let order_ids: Vec<String> = rows.iter().filter_map(|r| r.order_id.clone()).collect();
-    let order_statuses: Vec<(String, String)> = sqlx::query_as(
-        "SELECT order_id, status FROM orders WHERE order_id = ANY($1)",
-    )
-    .bind(&order_ids)
-    .fetch_all(pool)
-    .await?;
+    let order_statuses: Vec<(String, String)> =
+        sqlx::query_as("SELECT order_id, status FROM orders WHERE order_id = ANY($1)")
+            .bind(&order_ids)
+            .fetch_all(pool)
+            .await?;
     let status_map: std::collections::HashMap<String, String> =
         order_statuses.into_iter().collect();
 

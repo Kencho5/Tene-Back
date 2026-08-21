@@ -8,7 +8,7 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        Brand, CableType, CableVariant, CableTypeWithVariants, ProductFacets, ProductQuery,
+        Brand, CableType, CableTypeWithVariants, CableVariant, ProductFacets, ProductQuery,
         ProductResponse, ProductSearchResponse, TopProductsQuery,
     },
     queries::{admin_queries, products_queries},
@@ -69,9 +69,7 @@ pub async fn get_brands(State(state): State<AppState>) -> Result<Json<Vec<Brand>
     Ok(Json(brands))
 }
 
-pub async fn get_cable_types(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<CableType>>> {
+pub async fn get_cable_types(State(state): State<AppState>) -> Result<Json<Vec<CableType>>> {
     let types = admin_queries::get_cable_types(&state.db).await?;
     Ok(Json(types))
 }

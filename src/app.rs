@@ -38,7 +38,12 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
         ses_client,
         flitt_merchant_id: config.flitt.merchant_id,
         flitt_secret_key: config.flitt.secret_key.clone(),
-        frontend_url: config.cors.allowed_origins.first().cloned().unwrap_or_default(),
+        frontend_url: config
+            .cors
+            .allowed_origins
+            .first()
+            .cloned()
+            .unwrap_or_default(),
         backend_url: config.flitt.backend_url.clone(),
     };
     let allowed_origins: Vec<HeaderValue> = config

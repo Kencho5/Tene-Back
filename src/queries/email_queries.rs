@@ -26,7 +26,11 @@ pub async fn create_verification_code(
     Ok(verification_code)
 }
 
-pub async fn find_valid_code(pool: &PgPool, email: &str, code: i32) -> Result<Option<VerificationCode>> {
+pub async fn find_valid_code(
+    pool: &PgPool,
+    email: &str,
+    code: i32,
+) -> Result<Option<VerificationCode>> {
     let verification_code = sqlx::query_as::<_, VerificationCode>(
         "SELECT * FROM email_verification_codes
          WHERE email = $1 AND code = $2 AND expires_at > NOW()

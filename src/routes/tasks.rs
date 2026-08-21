@@ -139,7 +139,10 @@ pub async fn update_task(
     Json(payload): Json<UpdateTaskRequest>,
 ) -> Result<Json<TaskWithMedia>> {
     if task_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("task id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "task id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
     let task = task_queries::update_task(&state.db, id, &payload).await?;
     let resp = load_task_with_media(&state, task).await?;
@@ -152,27 +155,28 @@ pub async fn update_task_state(
     Json(payload): Json<TaskStateUpdate>,
 ) -> Result<Json<TaskWithMedia>> {
     if task_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("task id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "task id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
     let task = task_queries::update_task_state(&state.db, id, &payload.state).await?;
     let resp = load_task_with_media(&state, task).await?;
     Ok(Json(resp))
 }
 
-pub async fn delete_task(
-    State(state): State<AppState>,
-    Path(id): Path<i32>,
-) -> Result<StatusCode> {
+pub async fn delete_task(State(state): State<AppState>, Path(id): Path<i32>) -> Result<StatusCode> {
     if task_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("task id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "task id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     let prefix = format!("{}/{}/", env_prefix(&state), id);
     delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &prefix)
         .await
-        .map_err(|e| {
-            AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e))
-        })?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e)))?;
 
     task_queries::delete_task(&state.db, id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -184,7 +188,10 @@ pub async fn generate_task_media_urls(
     Json(payload): Json<TaskMediaUploadRequest>,
 ) -> Result<Json<TaskMediaUploadResponse>> {
     if task_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("task id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "task id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     let mut out = Vec::with_capacity(payload.items.len());
@@ -192,13 +199,7 @@ pub async fn generate_task_media_urls(
     for item in payload.items {
         let media_uuid = Uuid::new_v4();
         let extension = ext_for(&item.media_type, &item.content_type);
-        let key = format!(
-            "{}/{}/{}.{}",
-            env_prefix(&state),
-            id,
-            media_uuid,
-            extension
-        );
+        let key = format!("{}/{}/{}.{}", env_prefix(&state), id, media_uuid, extension);
 
         let upload_url = put_object_url(
             &state.s3_client,
@@ -255,9 +256,7 @@ pub async fn delete_task_media(
 
     delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
-        .map_err(|e| {
-            AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e))
-        })?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

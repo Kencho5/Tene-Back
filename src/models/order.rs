@@ -255,7 +255,7 @@ impl CheckoutPaymentMethod {
 }
 
 pub struct OrderItemData {
-    pub product_id: String,
+    pub product_id: Option<String>,
     pub color: Option<String>,
     pub quantity: i32,
     pub price: Decimal,
@@ -421,4 +421,3 @@ pub struct PaymentLinkRequest {
     #[serde(default)]
     pub comment: Option<String>,
 }
-

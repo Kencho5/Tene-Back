@@ -33,7 +33,14 @@ pub async fn find_cable_variants_by_type_ids(
 pub async fn find_product_bundle(
     pool: &PgPool,
     id: &str,
-) -> Result<Option<(Product, Vec<ProductImage>, Vec<Category>, Option<crate::models::ProductSeo>)>> {
+) -> Result<
+    Option<(
+        Product,
+        Vec<ProductImage>,
+        Vec<Category>,
+        Option<crate::models::ProductSeo>,
+    )>,
+> {
     #[derive(sqlx::FromRow)]
     struct Row {
         #[sqlx(flatten)]
@@ -244,20 +251,18 @@ pub async fn search_products(
         });
 
         return match matched {
-            Some((product, images, categories, seo)) => {
-                Ok(crate::models::ProductSearchResponse {
-                    products: vec![ProductResponse {
-                        videos: ProductResponse::videos_from(&product),
-                        data: product,
-                        images,
-                        categories,
-                        seo,
-                    }],
-                    total: 1,
-                    limit,
-                    offset,
-                })
-            }
+            Some((product, images, categories, seo)) => Ok(crate::models::ProductSearchResponse {
+                products: vec![ProductResponse {
+                    videos: ProductResponse::videos_from(&product),
+                    data: product,
+                    images,
+                    categories,
+                    seo,
+                }],
+                total: 1,
+                limit,
+                offset,
+            }),
             None => Ok(crate::models::ProductSearchResponse {
                 products: Vec::new(),
                 total: 0,
@@ -283,7 +288,9 @@ pub async fn search_products(
     if needs_views {
         qb.push(", COALESCE(pvc.view_count, 0) as view_count");
     }
-    qb.push(", COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id");
+    qb.push(
+        ", COUNT(*) OVER() as total_count FROM products p LEFT JOIN brands b ON p.brand_id = b.id",
+    );
     if needs_views {
         qb.push(
             " LEFT JOIN (
@@ -418,10 +425,7 @@ pub async fn search_products(
         total_count: i64,
     }
 
-    let results = qb
-        .build_query_as::<SearchResult>()
-        .fetch_all(pool)
-        .await?;
+    let results = qb.build_query_as::<SearchResult>().fetch_all(pool).await?;
 
     let total = results.first().map(|r| r.total_count).unwrap_or(0);
 

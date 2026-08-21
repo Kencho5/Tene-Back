@@ -114,7 +114,7 @@ pub async fn create_order_with_items_raw(
     .fetch_one(&mut *tx)
     .await?;
 
-    let product_ids: Vec<&str> = items.iter().map(|i| i.product_id.as_str()).collect();
+    let product_ids: Vec<Option<&str>> = items.iter().map(|i| i.product_id.as_deref()).collect();
     let colors: Vec<Option<&str>> = items.iter().map(|i| i.color.as_deref()).collect();
     let quantities: Vec<i32> = items.iter().map(|i| i.quantity).collect();
     let prices: Vec<Decimal> = items.iter().map(|i| i.price).collect();
@@ -201,7 +201,8 @@ pub async fn create_admin_order(
     .await?;
 
     if !items.is_empty() {
-        let product_ids: Vec<&str> = items.iter().map(|i| i.product_id.as_str()).collect();
+        let product_ids: Vec<Option<&str>> =
+            items.iter().map(|i| i.product_id.as_deref()).collect();
         let colors: Vec<Option<&str>> = items.iter().map(|i| i.color.as_deref()).collect();
         let quantities: Vec<i32> = items.iter().map(|i| i.quantity).collect();
         let prices: Vec<Decimal> = items.iter().map(|i| i.price).collect();
@@ -260,12 +261,10 @@ pub async fn update_order_status_and_deduct_stock(
     let mut stock_ok = true;
 
     if status == "approved" {
-        let items = sqlx::query_as::<_, OrderItem>(
-            "SELECT * FROM order_items WHERE order_id = $1",
-        )
-        .bind(order.id)
-        .fetch_all(&mut *tx)
-        .await?;
+        let items = sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = $1")
+            .bind(order.id)
+            .fetch_all(&mut *tx)
+            .await?;
 
         for item in &items {
             let Some(product_id) = &item.product_id else {

@@ -40,9 +40,8 @@ fn resolve_discount(
         if d == Decimal::ZERO {
             return Ok(Some((Decimal::ZERO, None)));
         }
-        let p = price.ok_or_else(|| {
-            AppError::BadRequest("discount-ისთვის price აუცილებელია".to_string())
-        })?;
+        let p = price
+            .ok_or_else(|| AppError::BadRequest("discount-ისთვის price აუცილებელია".to_string()))?;
         if p <= Decimal::ZERO {
             return Err(AppError::BadRequest("price უნდა იყოს დადებითი".to_string()));
         }
@@ -99,10 +98,7 @@ fn validate_videos(urls: &[String]) -> Result<serde_json::Value> {
     for url in urls {
         let url = url.trim();
         if !(url.starts_with("http://") || url.starts_with("https://")) {
-            return Err(AppError::BadRequest(format!(
-                "არასწორი ვიდეო URL: {}",
-                url
-            )));
+            return Err(AppError::BadRequest(format!("არასწორი ვიდეო URL: {}", url)));
         }
         let platform = detect_video_platform(url).ok_or_else(|| {
             AppError::BadRequest(format!(
@@ -1372,7 +1368,7 @@ pub async fn create_order(
         subtotal += price * Decimal::from(quantity);
 
         order_items.push(OrderItemData {
-            product_id: item.product_id.clone().unwrap_or_default(),
+            product_id: item.product_id.clone().filter(|id| !id.is_empty()),
             color: item.color.clone(),
             quantity,
             price,
@@ -1441,9 +1437,7 @@ pub async fn create_payment_link(
         .ok_or_else(|| AppError::BadRequest("არასწორი ფასი".to_string()))?;
 
     if price <= Decimal::ZERO {
-        return Err(AppError::BadRequest(
-            "ფასი უნდა იყოს დადებითი".to_string(),
-        ));
+        return Err(AppError::BadRequest("ფასი უნდა იყოს დადებითი".to_string()));
     }
 
     let amount_tetri = (price * Decimal::from(100))

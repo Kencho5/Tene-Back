@@ -1,7 +1,4 @@
-use axum::{
-    extract::FromRequestParts,
-    http::request::Parts,
-};
+use axum::{extract::FromRequestParts, http::request::Parts};
 
 use crate::{
     AppState,
@@ -10,7 +7,9 @@ use crate::{
 };
 
 pub fn extract_user_id(claims: &Claims) -> Result<i32> {
-    claims.sub.parse::<i32>()
+    claims
+        .sub
+        .parse::<i32>()
         .map_err(|_| AppError::TokenInvalid(SESSION_EXPIRED.to_string()))
 }
 

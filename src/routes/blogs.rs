@@ -10,9 +10,9 @@ use crate::{
     AppState,
     error::{AppError, Result},
     models::{
-        Blog, BlogMediaResponse, BlogMediaType, BlogMediaUploadRequest, BlogMediaUploadResponse,
-        BlogMediaThumbnailRequest, BlogMediaUploadUrl, BlogQuery, BlogSearchResponse,
-        BlogWithMedia, CreateBlogRequest, PublicBlogQuery, UpdateBlogRequest,
+        Blog, BlogMediaResponse, BlogMediaThumbnailRequest, BlogMediaType, BlogMediaUploadRequest,
+        BlogMediaUploadResponse, BlogMediaUploadUrl, BlogQuery, BlogSearchResponse, BlogWithMedia,
+        CreateBlogRequest, PublicBlogQuery, UpdateBlogRequest,
     },
     queries::blog_queries,
     services::image_url_service::{delete_objects_by_prefix, delete_single_object, put_object_url},
@@ -60,11 +60,7 @@ fn slugify(input: &str) -> String {
     slug.trim_matches('-').chars().take(280).collect()
 }
 
-async fn unique_slug(
-    state: &AppState,
-    desired: &str,
-    exclude_id: Option<i32>,
-) -> Result<String> {
+async fn unique_slug(state: &AppState, desired: &str, exclude_id: Option<i32>) -> Result<String> {
     let base = slugify(desired);
     let base = if base.is_empty() {
         Uuid::new_v4().to_string()
@@ -103,8 +99,10 @@ fn to_response(state: &AppState, blog_id: i32, m: &crate::models::BlogMedia) -> 
 
 async fn load_blog_with_media(state: &AppState, blog: Blog) -> Result<BlogWithMedia> {
     let media = blog_queries::get_blog_media(&state.db, blog.id).await?;
-    let responses: Vec<BlogMediaResponse> =
-        media.iter().map(|m| to_response(state, blog.id, m)).collect();
+    let responses: Vec<BlogMediaResponse> = media
+        .iter()
+        .map(|m| to_response(state, blog.id, m))
+        .collect();
     let thumbnail = responses.iter().find(|m| m.is_thumbnail).cloned();
     Ok(BlogWithMedia {
         blog,
@@ -227,7 +225,10 @@ pub async fn update_blog(
     Json(payload): Json<UpdateBlogRequest>,
 ) -> Result<Json<BlogWithMedia>> {
     if blog_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("blog id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "blog id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     let slug = match payload.slug.as_deref() {
@@ -240,20 +241,18 @@ pub async fn update_blog(
     Ok(Json(resp))
 }
 
-pub async fn delete_blog(
-    State(state): State<AppState>,
-    Path(id): Path<i32>,
-) -> Result<StatusCode> {
+pub async fn delete_blog(State(state): State<AppState>, Path(id): Path<i32>) -> Result<StatusCode> {
     if blog_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("blog id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "blog id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     let prefix = format!("{}/{}/", env_prefix(&state), id);
     delete_objects_by_prefix(&state.s3_client, &state.s3_bucket, &prefix)
         .await
-        .map_err(|e| {
-            AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e))
-        })?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e)))?;
 
     blog_queries::delete_blog(&state.db, id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -265,7 +264,10 @@ pub async fn generate_blog_media_urls(
     Json(payload): Json<BlogMediaUploadRequest>,
 ) -> Result<Json<BlogMediaUploadResponse>> {
     if blog_queries::find_by_id(&state.db, id).await?.is_none() {
-        return Err(AppError::NotFound(format!("blog id-ით {} ვერ მოიძებნა", id)));
+        return Err(AppError::NotFound(format!(
+            "blog id-ით {} ვერ მოიძებნა",
+            id
+        )));
     }
 
     let mut out = Vec::with_capacity(payload.items.len());
@@ -376,9 +378,7 @@ pub async fn delete_blog_media(
 
     delete_single_object(&state.s3_client, &state.s3_bucket, &key)
         .await
-        .map_err(|e| {
-            AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e))
-        })?;
+        .map_err(|e| AppError::InternalError(format!("S3-დან მედიის წაშლა ვერ მოხერხდა: {}", e)))?;
 
     Ok(StatusCode::NO_CONTENT)
 }
