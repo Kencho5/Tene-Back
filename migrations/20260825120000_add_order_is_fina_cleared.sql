@@ -1,0 +1,2 @@
+ALTER TABLE orders
+    ADD COLUMN is_fina_cleared BOOLEAN NOT NULL DEFAULT FALSE;

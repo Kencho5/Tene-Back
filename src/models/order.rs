@@ -116,6 +116,7 @@ pub struct Order {
     pub source_comment: Option<String>,
     pub is_installment_sale: bool,
     pub is_product_exchange: bool,
+    pub is_fina_cleared: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -403,9 +404,63 @@ pub struct AdminOrderRequest {
     #[serde(default)]
     pub is_product_exchange: bool,
     #[serde(default)]
+    pub is_fina_cleared: bool,
+    #[serde(default)]
     pub items: Vec<AdminOrderItemRequest>,
     #[serde(default)]
     pub comment_image_uuids: Vec<Uuid>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct OrderUpdateRequest {
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub is_fina_cleared: Option<bool>,
+    #[serde(default)]
+    pub payment_method: Option<PaymentMethod>,
+    #[serde(default)]
+    pub fulfillment_method: Option<FulfillmentMethod>,
+    #[serde(default)]
+    pub amount: Option<Decimal>,
+    #[serde(default)]
+    pub customer_type: Option<String>,
+    #[serde(default)]
+    pub customer_name: Option<String>,
+    #[serde(default)]
+    pub customer_surname: Option<String>,
+    #[serde(default)]
+    pub organization_type: Option<String>,
+    #[serde(default)]
+    pub organization_name: Option<String>,
+    #[serde(default)]
+    pub organization_code: Option<String>,
+    #[serde(default)]
+    pub email: Option<String>,
+    #[serde(default)]
+    pub phone_number: Option<String>,
+    #[serde(default)]
+    pub address: Option<String>,
+    #[serde(default)]
+    pub city: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub details: Option<String>,
+    #[serde(default)]
+    pub delivery_type: Option<String>,
+    #[serde(default)]
+    pub delivery_time: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
+    #[serde(default)]
+    pub personal_number: Option<String>,
+    #[serde(default)]
+    pub source_comment: Option<String>,
+    #[serde(default)]
+    pub is_installment_sale: Option<bool>,
+    #[serde(default)]
+    pub is_product_exchange: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

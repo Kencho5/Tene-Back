@@ -166,8 +166,8 @@ pub async fn create_admin_order(
          organization_type, organization_name, organization_code, email, phone_number, address,
          city, region, details, delivery_type, delivery_time, comment,
          source, created_by_user_id, payment_method, fulfillment_method, personal_number,
-         source_comment, is_installment_sale, is_product_exchange)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+         source_comment, is_installment_sale, is_product_exchange, is_fina_cleared)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
          RETURNING *",
     )
     .bind(req.user_id)
@@ -197,6 +197,7 @@ pub async fn create_admin_order(
     .bind(req.source_comment.as_deref())
     .bind(req.is_installment_sale)
     .bind(req.is_product_exchange)
+    .bind(req.is_fina_cleared)
     .fetch_one(&mut *tx)
     .await?;
 

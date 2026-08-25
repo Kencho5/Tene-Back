@@ -1163,6 +1163,41 @@ pub async fn update_order_status(
     Ok(Json(order))
 }
 
+pub async fn update_order(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<OrderUpdateRequest>,
+) -> Result<Json<OrderResponse>> {
+    if let Some(status) = payload.status.as_deref()
+        && status.trim().is_empty()
+    {
+        return Err(AppError::BadRequest("სტატუსი აუცილებელია".to_string()));
+    }
+
+    let order = admin_queries::update_order(&state.db, id, &payload)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
+
+    let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
+    let comment_image_rows =
+        order_queries::get_comment_images_for_orders(&state.db, &[order.id]).await?;
+    let comment_images = super::orders::build_comment_images(&state, comment_image_rows);
+
+    let created_by = match order.created_by_user_id {
+        Some(user_id) => admin_queries::get_order_creators(&state.db, &[user_id])
+            .await?
+            .remove(&user_id),
+        None => None,
+    };
+
+    Ok(Json(OrderResponse {
+        order,
+        items,
+        comment_images,
+        created_by,
+    }))
+}
+
 pub async fn export_orders(
     State(state): State<AppState>,
     Query(mut params): Query<OrderQuery>,
@@ -1183,6 +1218,7 @@ pub async fn export_orders(
         "ID",
         "შეკვეთის ნომერი",
         "სტატუსი",
+        "ფინა",
         "თანხა (₾)",
         "ვალუტა",
         "მომხმარებელი",
@@ -1252,10 +1288,16 @@ pub async fn export_orders(
             _ => "საიტი",
         };
 
-        let cells: [String; 18] = [
+        let cells: [String; 19] = [
             order.id.to_string(),
             order.order_id.clone(),
             order.status.clone(),
+            if order.is_fina_cleared {
+                "კი"
+            } else {
+                "არა"
+            }
+            .to_string(),
             (Decimal::from(order.amount) / Decimal::from(100)).to_string(),
             order.currency.clone(),
             customer,

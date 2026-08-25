@@ -1,15 +1,16 @@
+use rust_decimal::{Decimal, prelude::ToPrimitive};
 use sqlx::PgPool;
 
 use crate::{
-    error::Result,
+    error::{AppError, Result},
     models::{
         AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
         CableVariant, CableVariantRequest, CableVariantUpdate, CartSnapshotItem, CheckoutEventRow,
         CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
         HighViewsLowSales, MostViewedProduct, Order, OrderCreator, OrderQuery, OrderSearchResponse,
-        OrderSource, Product, ProductImage, ProductRequest, ProductSeo, ProductSeoRequest,
-        TrendingProduct, UniqueViewersProduct, UserQuery, UserRequest, UserResponse,
-        UserSearchResponse, ViewsByHour,
+        OrderSource, OrderUpdateRequest, Product, ProductImage, ProductRequest, ProductSeo,
+        ProductSeoRequest, TrendingProduct, UniqueViewersProduct, UserQuery, UserRequest,
+        UserResponse, UserSearchResponse, ViewsByHour,
     },
 };
 
@@ -330,6 +331,76 @@ pub async fn update_order_status(pool: &PgPool, id: i32, status: &str) -> Result
     Ok(order)
 }
 
+fn gel_to_tetri(amount: Decimal) -> Result<i32> {
+    (amount * Decimal::from(100))
+        .round()
+        .to_i32()
+        .ok_or_else(|| AppError::BadRequest("არასწორი თანხა".to_string()))
+}
+
+pub async fn update_order(
+    pool: &PgPool,
+    id: i32,
+    req: &OrderUpdateRequest,
+) -> Result<Option<Order>> {
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("UPDATE orders SET ");
+    let mut separated = query_builder.separated(", ");
+
+    macro_rules! set_field {
+        ($column:literal, $value:expr) => {
+            if let Some(value) = $value {
+                separated.push(concat!($column, " = "));
+                separated.push_bind_unseparated(value);
+            }
+        };
+    }
+
+    set_field!("status", req.status.as_deref());
+    set_field!("is_fina_cleared", req.is_fina_cleared);
+    set_field!("payment_method", req.payment_method.map(|m| m.as_str()));
+    set_field!(
+        "fulfillment_method",
+        req.fulfillment_method.map(|m| m.as_str())
+    );
+    set_field!("customer_type", req.customer_type.as_deref());
+    set_field!("customer_name", req.customer_name.as_deref());
+    set_field!("customer_surname", req.customer_surname.as_deref());
+    set_field!("organization_type", req.organization_type.as_deref());
+    set_field!("organization_name", req.organization_name.as_deref());
+    set_field!("organization_code", req.organization_code.as_deref());
+    set_field!("email", req.email.as_deref());
+    set_field!("phone_number", req.phone_number.as_deref());
+    set_field!("address", req.address.as_deref());
+    set_field!("city", req.city.as_deref());
+    set_field!("region", req.region.as_deref());
+    set_field!("details", req.details.as_deref());
+    set_field!("delivery_type", req.delivery_type.as_deref());
+    set_field!("delivery_time", req.delivery_time.as_deref());
+    set_field!("comment", req.comment.as_deref());
+    set_field!("personal_number", req.personal_number.as_deref());
+    set_field!("source_comment", req.source_comment.as_deref());
+    set_field!("is_installment_sale", req.is_installment_sale);
+    set_field!("is_product_exchange", req.is_product_exchange);
+
+    if let Some(amount) = req.amount {
+        separated.push("amount = ");
+        separated.push_bind_unseparated(gel_to_tetri(amount)?);
+    }
+
+    separated.push("updated_at = NOW()");
+
+    query_builder.push(" WHERE id = ");
+    query_builder.push_bind(id);
+    query_builder.push(" RETURNING *");
+
+    let order = query_builder
+        .build_query_as::<Order>()
+        .fetch_optional(pool)
+        .await?;
+
+    Ok(order)
+}
+
 pub async fn get_order_creators(
     pool: &PgPool,
     user_ids: &[i32],
@@ -390,16 +461,24 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(user_id);
     }
 
-    if let Some(ref status) = params.status {
-        let statuses: Vec<String> = status
+    for (column, value) in [
+        ("status", &params.status),
+        ("payment_method", &params.payment_method),
+        ("delivery_type", &params.delivery_type),
+        ("fulfillment_method", &params.fulfillment_method),
+    ] {
+        let Some(value) = value else { continue };
+        let values: Vec<String> = value
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(String::from)
             .collect();
-        if !statuses.is_empty() {
-            query_builder.push(" AND status = ANY(");
-            query_builder.push_bind(statuses);
+        if !values.is_empty() {
+            query_builder.push(" AND ");
+            query_builder.push(column);
+            query_builder.push(" = ANY(");
+            query_builder.push_bind(values);
             query_builder.push(")");
         }
     }
@@ -412,9 +491,37 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(created_by);
     }
 
-    if let Some(payment_method) = params.payment_method {
-        query_builder.push(" AND payment_method = ");
-        query_builder.push_bind(payment_method.as_str());
+    if let Some(city) = params
+        .city
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        query_builder.push(" AND city = ");
+        query_builder.push_bind(city.to_string());
+    }
+
+    for (column, value) in [
+        ("is_fina_cleared", params.is_fina_cleared),
+        ("is_installment_sale", params.is_installment_sale),
+        ("is_product_exchange", params.is_product_exchange),
+    ] {
+        if let Some(value) = value {
+            query_builder.push(" AND ");
+            query_builder.push(column);
+            query_builder.push(" = ");
+            query_builder.push_bind(value);
+        }
+    }
+
+    if let Some(min_amount) = params.min_amount {
+        query_builder.push(" AND amount >= ");
+        query_builder.push_bind(gel_to_tetri(min_amount)?);
+    }
+
+    if let Some(max_amount) = params.max_amount {
+        query_builder.push(" AND amount <= ");
+        query_builder.push_bind(gel_to_tetri(max_amount)?);
     }
 
     if let Some(from_date) = params.from_date {
