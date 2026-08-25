@@ -120,10 +120,13 @@ pub async fn create_product(
     State(state): State<AppState>,
     Json(mut payload): Json<ProductRequest>,
 ) -> Result<Json<ProductResponse>> {
-    let id = payload
-        .id
+    let sku = payload
+        .sku
         .as_ref()
-        .ok_or_else(|| AppError::BadRequest("id აუცილებელია".to_string()))?;
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| AppError::BadRequest("SKU აუცილებელია".to_string()))?;
+    payload.sku = Some(sku.clone());
 
     if payload.name.is_none() {
         return Err(AppError::BadRequest("სახელი აუცილებელია".to_string()));
@@ -133,12 +136,17 @@ pub async fn create_product(
         return Err(AppError::BadRequest("ფასი აუცილებელია".to_string()));
     }
 
-    if products_queries::find_by_id(&state.db, id).await?.is_some() {
+    if admin_queries::find_product_by_sku(&state.db, &sku)
+        .await?
+        .is_some()
+    {
         return Err(AppError::Conflict(format!(
-            "პროდუქტი id-ით {} უკვე არსებობს",
-            id
+            "პროდუქტი SKU-ით {} უკვე არსებობს",
+            sku
         )));
     }
+
+    let id = uuid::Uuid::new_v4().to_string();
 
     if let Some((discount, discounted_price)) =
         resolve_discount(payload.price, payload.discount, payload.discounted_price)?
@@ -154,7 +162,7 @@ pub async fn create_product(
         if let Some(ref slug) = seo.slug {
             if let Some(other_id) = admin_queries::find_product_seo_by_slug(&state.db, slug).await?
             {
-                if &other_id != id {
+                if other_id != id {
                     return Err(AppError::Conflict(format!(
                         "slug '{}' უკვე გამოყენებულია",
                         slug
@@ -169,7 +177,7 @@ pub async fn create_product(
         None => serde_json::json!([]),
     };
 
-    let product = admin_queries::create_product(&state.db, &payload, &videos).await?;
+    let product = admin_queries::create_product(&state.db, &id, &payload, &videos).await?;
 
     let seo = if let Some(ref seo_req) = payload.seo {
         Some(admin_queries::upsert_product_seo(&state.db, &product.id, seo_req).await?)
@@ -197,6 +205,21 @@ pub async fn update_product(
     let existing = products_queries::find_by_id(&state.db, &id)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("პროდუქტი id-ით {} ვერ მოიძებნა", id)))?;
+
+    if let Some(sku) = payload.sku.as_ref().map(|s| s.trim().to_string()) {
+        if sku.is_empty() {
+            return Err(AppError::BadRequest("SKU არ უნდა იყოს ცარიელი".to_string()));
+        }
+        if let Some(other_id) = admin_queries::find_product_by_sku(&state.db, &sku).await? {
+            if other_id != id {
+                return Err(AppError::Conflict(format!(
+                    "პროდუქტი SKU-ით {} უკვე არსებობს",
+                    sku
+                )));
+            }
+        }
+        payload.sku = Some(sku);
+    }
 
     let effective_price = payload.price.unwrap_or(existing.price);
     match resolve_discount(

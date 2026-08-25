@@ -16,20 +16,22 @@ use crate::{
 
 pub async fn create_product(
     pool: &PgPool,
+    id: &str,
     req: &ProductRequest,
     videos: &serde_json::Value,
 ) -> Result<Product> {
     let product = sqlx::query_as::<_, Product>(
         r#"
         INSERT INTO products (
-            id, name, description, price, discount, discounted_price, quantity,
+            id, sku, name, description, price, discount, discounted_price, quantity,
             specifications, brand_id, cable_type_id, warranty, videos, enabled
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *, (SELECT name FROM brands WHERE id = brand_id) as brand_name
         "#,
     )
-    .bind(&req.id)
+    .bind(id)
+    .bind(&req.sku)
     .bind(&req.name)
     .bind(&req.description)
     .bind(&req.price)
@@ -62,6 +64,7 @@ pub async fn update_product(
         r#"
         UPDATE products
         SET
+            sku = COALESCE($15, sku),
             name = COALESCE($1, name),
             description = COALESCE($2, description),
             price = COALESCE($3, price),
@@ -92,10 +95,19 @@ pub async fn update_product(
     .bind(videos)
     .bind(&req.enabled)
     .bind(id)
+    .bind(&req.sku)
     .fetch_one(pool)
     .await?;
 
     Ok(product)
+}
+
+pub async fn find_product_by_sku(pool: &PgPool, sku: &str) -> Result<Option<String>> {
+    let id = sqlx::query_scalar::<_, String>("SELECT id FROM products WHERE sku = $1")
+        .bind(sku)
+        .fetch_optional(pool)
+        .await?;
+    Ok(id)
 }
 
 // brands
@@ -247,7 +259,10 @@ pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearch
 
     if let Some(ref email) = params.email {
         query_builder.push(" AND email ILIKE ");
-        query_builder.push_bind(format!("%{}%", email));
+        query_builder.push_bind(format!(
+            "%{}%",
+            crate::queries::products_queries::escape_like(email)
+        ));
     }
 
     query_builder.push(" ORDER BY created_at DESC");
@@ -444,7 +459,10 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
             query_builder.push_bind(search_id);
             query_builder.push(" OR ");
         }
-        let pattern = format!("%{}%", search);
+        let pattern = format!(
+            "%{}%",
+            crate::queries::products_queries::escape_like(search)
+        );
         query_builder.push("customer_name ILIKE ");
         query_builder.push_bind(pattern.clone());
         query_builder.push(" OR customer_surname ILIKE ");
@@ -453,6 +471,11 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(pattern.clone());
         query_builder.push(" OR email ILIKE ");
         query_builder.push_bind(pattern);
+        query_builder.push(
+            " OR EXISTS (SELECT 1 FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = orders.id AND (false",
+        );
+        crate::queries::products_queries::push_code_match(&mut query_builder, "p.sku", search);
+        query_builder.push("))");
         query_builder.push(")");
     }
 

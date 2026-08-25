@@ -126,6 +126,8 @@ pub struct OrderItem {
     pub id: i32,
     pub order_id: i32,
     pub product_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub product_sku: Option<String>,
     pub color: Option<String>,
     pub quantity: i32,
     pub price_at_purchase: Decimal,

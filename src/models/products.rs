@@ -8,6 +8,7 @@ use crate::models::{Category, CategoryFacetValue};
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Product {
     pub id: String,
+    pub sku: String,
     pub name: String,
     pub description: Option<String>,
     pub price: Decimal,

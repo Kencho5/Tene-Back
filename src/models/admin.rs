@@ -19,6 +19,7 @@ where
 #[derive(Debug, Deserialize)]
 pub struct ProductRequest {
     pub id: Option<String>,
+    pub sku: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,
     pub price: Option<Decimal>,

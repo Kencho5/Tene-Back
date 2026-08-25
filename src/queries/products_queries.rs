@@ -92,7 +92,7 @@ pub async fn find_product_bundle(
             ) AS seo_json
         FROM products p
         LEFT JOIN brands b ON p.brand_id = b.id
-        WHERE p.id = $1
+        WHERE p.id = $1 OR p.sku = $1
         "#,
     )
     .bind(id)
@@ -227,10 +227,22 @@ pub async fn find_seo_by_product_ids(
     Ok(rows.into_iter().map(|r| (r.product_id, r.seo)).collect())
 }
 
-fn escape_like(s: &str) -> String {
+pub fn escape_like(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")
+}
+
+pub fn push_code_match(qb: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, column: &str, q: &str) {
+    let code_like = format!("{}%", escape_like(q.trim()));
+    qb.push(" OR ");
+    qb.push(column);
+    qb.push(" ILIKE ");
+    qb.push_bind(code_like.clone());
+    qb.push(" OR regexp_replace(");
+    qb.push(column);
+    qb.push(", '^[A-Za-z]+[-_ ]?', '') ILIKE ");
+    qb.push_bind(code_like);
 }
 
 const DEFAULT_PAGE_SIZE: i64 = 12;
@@ -322,6 +334,7 @@ pub async fn search_products(
         qb.push_bind(q);
         qb.push(" OR COALESCE(p.description, '') % ");
         qb.push_bind(q);
+        push_code_match(&mut qb, "p.sku", q);
         qb.push(")");
     }
 
@@ -624,7 +637,9 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
         qb.push_bind(q);
         qb.push(") > 0.3 OR similarity(COALESCE(p.description, ''), ");
         qb.push_bind(q);
-        qb.push(") > 0.3)");
+        qb.push(") > 0.3");
+        push_code_match(&mut qb, "p.sku", q);
+        qb.push(")");
     }
     if let Some(min_price) = params.price_from {
         qb.push(" AND p.price >= ");

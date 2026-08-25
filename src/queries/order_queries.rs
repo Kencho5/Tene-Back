@@ -262,10 +262,14 @@ pub async fn update_order_status_and_deduct_stock(
     let mut stock_ok = true;
 
     if status == "approved" {
-        let items = sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = $1")
-            .bind(order.id)
-            .fetch_all(&mut *tx)
-            .await?;
+        let items = sqlx::query_as::<_, OrderItem>(
+            "SELECT oi.*, p.sku AS product_sku FROM order_items oi
+             LEFT JOIN products p ON p.id = oi.product_id
+             WHERE oi.order_id = $1",
+        )
+        .bind(order.id)
+        .fetch_all(&mut *tx)
+        .await?;
 
         for item in &items {
             let Some(product_id) = &item.product_id else {
@@ -369,11 +373,14 @@ pub async fn get_user_orders(pool: &PgPool, user_id: i32, email: &str) -> Result
 }
 
 pub async fn get_items_for_orders(pool: &PgPool, order_db_ids: &[i32]) -> Result<Vec<OrderItem>> {
-    let items =
-        sqlx::query_as::<_, OrderItem>("SELECT * FROM order_items WHERE order_id = ANY($1)")
-            .bind(order_db_ids)
-            .fetch_all(pool)
-            .await?;
+    let items = sqlx::query_as::<_, OrderItem>(
+        "SELECT oi.*, p.sku AS product_sku FROM order_items oi
+             LEFT JOIN products p ON p.id = oi.product_id
+             WHERE oi.order_id = ANY($1)",
+    )
+    .bind(order_db_ids)
+    .fetch_all(pool)
+    .await?;
 
     Ok(items)
 }
