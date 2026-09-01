@@ -1050,9 +1050,20 @@ pub async fn get_checkout_sessions(
         qb.push_bind(user_id);
     }
     if let Some(ref step) = params.step {
-        qb.push(" AND session_id IN (SELECT session_id FROM checkout_analytics WHERE step = ");
-        qb.push_bind(step);
-        qb.push(")");
+        let step_index = match step.as_str() {
+            "contact" => 0,
+            "delivery" => 1,
+            "review" => 2,
+            "payment" => 3,
+            _ => {
+                return Err(AppError::BadRequest(format!(
+                    "არასწორი step: {}. დაშვებულია: contact, delivery, review, payment",
+                    step
+                )));
+            }
+        };
+        qb.push(" AND last_step_index = ");
+        qb.push_bind(step_index);
     }
     match params.outcome.as_deref() {
         Some("completed") => {
