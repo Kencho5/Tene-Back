@@ -73,6 +73,8 @@ pub struct UserRequest {
     pub email: Option<String>,
     pub name: Option<String>,
     pub role: Option<UserRole>,
+    #[serde(default, deserialize_with = "deserialize_double_option")]
+    pub delivery_price: Option<Option<Decimal>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -81,6 +83,7 @@ pub struct UserResponse {
     pub email: String,
     pub name: String,
     pub role: UserRole,
+    pub delivery_price: Option<Decimal>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -88,6 +91,7 @@ pub struct UserResponse {
 pub struct UserQuery {
     pub id: Option<i32>,
     pub email: Option<String>,
+    pub role: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
 }

@@ -249,7 +249,7 @@ pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearch
     let offset = params.offset.unwrap_or(0);
 
     let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-        "SELECT id, email, name, role, created_at, COUNT(*) OVER() as total_count FROM users WHERE 1=1",
+        "SELECT id, email, name, role, delivery_price::numeric / 100 AS delivery_price, created_at, COUNT(*) OVER() as total_count FROM users WHERE 1=1",
     );
 
     if let Some(id) = params.id {
@@ -263,6 +263,23 @@ pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearch
             "%{}%",
             crate::queries::products_queries::escape_like(email)
         ));
+    }
+
+    if let Some(ref role) = params.role {
+        let roles: Vec<String> = role
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| match s {
+                "user" | "admin" | "operator" => Ok(s.to_string()),
+                other => Err(AppError::BadRequest(format!("არასწორი როლი: {}", other))),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        if !roles.is_empty() {
+            query_builder.push(" AND role = ANY(");
+            query_builder.push_bind(roles);
+            query_builder.push("::user_role[])");
+        }
     }
 
     query_builder.push(" ORDER BY created_at DESC");
@@ -296,6 +313,11 @@ pub async fn search_users(pool: &PgPool, params: UserQuery) -> Result<UserSearch
 }
 
 pub async fn update_user(pool: &PgPool, id: i32, req: &UserRequest) -> Result<UserResponse> {
+    let delivery_price = match req.delivery_price {
+        Some(Some(price)) => Some(gel_to_tetri(price)?),
+        _ => None,
+    };
+
     let user = sqlx::query_as::<_, UserResponse>(
         r#"
         UPDATE users
@@ -303,14 +325,18 @@ pub async fn update_user(pool: &PgPool, id: i32, req: &UserRequest) -> Result<Us
             email = COALESCE($1, email),
             name = COALESCE($2, name),
             role = COALESCE($3, role),
+            delivery_price = CASE WHEN $4 THEN $5 ELSE delivery_price END,
             updated_at = NOW()
-        WHERE id = $4
-        RETURNING id, email, name, role, created_at
+        WHERE id = $6
+        RETURNING id, email, name, role,
+            delivery_price::numeric / 100 AS delivery_price, created_at
         "#,
     )
     .bind(&req.email)
     .bind(&req.name)
     .bind(&req.role)
+    .bind(req.delivery_price.is_some())
+    .bind(delivery_price)
     .bind(id)
     .fetch_one(pool)
     .await?;
