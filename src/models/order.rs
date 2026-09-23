@@ -227,6 +227,8 @@ pub struct CheckoutRequest {
     pub customer: CustomerInfo,
     pub email: String,
     pub phone_number: String,
+    #[serde(default)]
+    pub phone_verification_code: Option<i32>,
     pub address: String,
     pub city: Option<String>,
     #[serde(default)]

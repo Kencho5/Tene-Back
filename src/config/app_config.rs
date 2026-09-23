@@ -9,6 +9,12 @@ pub struct FlittConfig {
 }
 
 #[derive(Debug, Clone)]
+pub struct SmsConfig {
+    pub api_key: String,
+    pub sender: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     pub server: ServerConfig,
     pub database: DatabaseConfig,
@@ -16,6 +22,7 @@ pub struct AppConfig {
     pub s3: S3Config,
     pub environment: Environment,
     pub flitt: FlittConfig,
+    pub sms: SmsConfig,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +120,11 @@ impl AppConfig {
                     .map_err(|_| AppError::ConfigError("FLITT_SECRET_KEY not set".to_string()))?,
                 backend_url: env::var("BACKEND_URL")
                     .map_err(|_| AppError::ConfigError("BACKEND_URL not set".to_string()))?,
+            },
+            sms: SmsConfig {
+                api_key: env::var("SMS_API_KEY")
+                    .map_err(|_| AppError::ConfigError("SMS_API_KEY not set".to_string()))?,
+                sender: env::var("SMS_SENDER").unwrap_or_else(|_| "Tene".to_string()),
             },
             environment,
         })

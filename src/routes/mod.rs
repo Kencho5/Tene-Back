@@ -5,6 +5,7 @@ mod google_auth;
 mod health;
 mod login;
 mod orders;
+mod phone_numbers;
 mod products;
 mod register;
 mod send_code;
@@ -91,6 +92,17 @@ fn user_routes() -> Router<AppState> {
             "/addresses/{address_id}",
             delete(user_addresses::delete_address),
         )
+        .route("/phone-numbers", get(phone_numbers::get_phone_numbers))
+        .route("/phone-numbers", post(phone_numbers::add_phone_number))
+        .route("/phone-numbers/verify", post(phone_numbers::verify_phone))
+        .route(
+            "/phone-numbers/{id}",
+            put(phone_numbers::update_phone_number),
+        )
+        .route(
+            "/phone-numbers/{id}",
+            delete(phone_numbers::delete_phone_number),
+        )
         .layer(middleware::from_fn(auth_middleware))
 }
 
@@ -101,6 +113,7 @@ fn checkout_routes() -> Router<AppState> {
 
     Router::new()
         .route("/checkout", post(orders::checkout))
+        .route("/phone/send-code", post(phone_numbers::send_code))
         .route(
             "/checkout/comment-images",
             put(orders::generate_comment_image_urls),

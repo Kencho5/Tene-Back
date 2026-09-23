@@ -18,10 +18,11 @@ use crate::{
         CheckoutResponse, CommentImage, CommentImageUploadUrl, CommentImageUrlRequest,
         CommentImageUrlResponse, OrderCommentImage, OrderItemData, OrderResponse,
     },
-    queries::{admin_queries, order_queries, products_queries, user_queries},
-    services::{delivery_service, email_service, flitt_service, image_url_service},
+    queries::{admin_queries, order_queries, phone_queries, products_queries, user_queries},
+    services::{delivery_service, email_service, flitt_service, image_url_service, sms_service},
     utils::extractors::{LenientClaims, OptionalClaims, extract_user_id},
     utils::jwt::Claims,
+    utils::phone::normalize_phone,
 };
 
 pub async fn track_checkout_analytics(
@@ -114,11 +115,27 @@ pub async fn generate_comment_image_urls(
 pub async fn checkout(
     State(state): State<AppState>,
     OptionalClaims(claims): OptionalClaims,
-    Json(payload): Json<CheckoutRequest>,
+    Json(mut payload): Json<CheckoutRequest>,
 ) -> Result<Json<CheckoutResponse>> {
     let user_id = claims.as_ref().and_then(|c| extract_user_id(c).ok());
 
     validate_checkout_request(&payload)?;
+
+    payload.phone_number = normalize_phone(&payload.phone_number)?;
+
+    let phone_already_verified = match user_id {
+        Some(user_id) => {
+            phone_queries::is_phone_verified(&state.db, user_id, &payload.phone_number).await?
+        }
+        None => false,
+    };
+
+    if !phone_already_verified {
+        let code = payload.phone_verification_code.ok_or_else(|| {
+            AppError::BadRequest("საჭიროა ტელეფონის ნომრის დადასტურება".to_string())
+        })?;
+        phone_queries::check_verification_code(&state.db, &payload.phone_number, code).await?;
+    }
 
     let (order_items, subtotal) = build_order_items(&state, &payload).await?;
 
@@ -159,6 +176,13 @@ pub async fn checkout(
     )
     .await?;
 
+    if !phone_already_verified {
+        phone_queries::consume_verification_codes(&state.db, &payload.phone_number).await?;
+        if let Some(user_id) = user_id {
+            phone_queries::mark_phone_verified(&state.db, user_id, &payload.phone_number).await?;
+        }
+    }
+
     if !payload.comment_image_uuids.is_empty() {
         order_queries::attach_comment_images(&state.db, order.id, &payload.comment_image_uuids)
             .await?;
@@ -172,7 +196,7 @@ pub async fn checkout(
 
         match approved {
             Some((order, true)) => {
-                send_order_emails(&state, &order).await;
+                send_order_notifications(&state, &order).await;
             }
             _ => {
                 tracing::warn!("cash on delivery order {} could not be approved", order_id);
@@ -208,6 +232,36 @@ pub async fn checkout(
         order_id,
         checkout_url: Some(checkout_url),
     }))
+}
+
+async fn send_order_notifications(state: &AppState, order: &crate::models::Order) {
+    send_order_sms(state, order).await;
+    send_order_emails(state, order).await;
+}
+
+async fn send_order_sms(state: &AppState, order: &crate::models::Order) {
+    let phone_number = match normalize_phone(&order.phone_number) {
+        Ok(phone_number) => phone_number,
+        Err(_) => {
+            tracing::warn!(
+                "Skipping order SMS for {}: invalid phone {}",
+                order.order_id,
+                order.phone_number
+            );
+            return;
+        }
+    };
+
+    if let Err(e) = sms_service::send_order_confirmation(
+        &state.sms_api_key,
+        &state.sms_sender,
+        &phone_number,
+        order.amount,
+    )
+    .await
+    {
+        tracing::error!("Failed to send order SMS for {}: {:?}", order.order_id, e);
+    }
 }
 
 async fn send_order_emails(state: &AppState, order: &crate::models::Order) {
@@ -485,7 +539,7 @@ pub async fn flitt_callback(
             if !stock_ok {
                 tracing::warn!("Insufficient stock for approved order {}", order_id);
             } else if order_status == "approved" {
-                send_order_emails(&state, &order).await;
+                send_order_notifications(&state, &order).await;
             }
             StatusCode::OK
         }

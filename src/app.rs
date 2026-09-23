@@ -22,6 +22,8 @@ pub struct AppState {
     pub flitt_secret_key: String,
     pub frontend_url: String,
     pub backend_url: String,
+    pub sms_api_key: String,
+    pub sms_sender: String,
 }
 
 pub async fn build(config: &AppConfig) -> Result<Router> {
@@ -45,6 +47,8 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
             .cloned()
             .unwrap_or_default(),
         backend_url: config.flitt.backend_url.clone(),
+        sms_api_key: config.sms.api_key.clone(),
+        sms_sender: config.sms.sender.clone(),
     };
     let allowed_origins: Vec<HeaderValue> = config
         .cors

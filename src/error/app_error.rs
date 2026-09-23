@@ -19,6 +19,7 @@ pub enum AppError {
     Unauthorized(String),
     TokenInvalid(String),
     Forbidden(String),
+    TooManyRequests(String),
 }
 
 impl fmt::Display for AppError {
@@ -33,6 +34,7 @@ impl fmt::Display for AppError {
             AppError::Unauthorized(msg) => write!(f, "არაავტორიზებული: {}", msg),
             AppError::TokenInvalid(msg) => write!(f, "არაავტორიზებული: {}", msg),
             AppError::Forbidden(msg) => write!(f, "აკრძალული: {}", msg),
+            AppError::TooManyRequests(msg) => write!(f, "ძალიან ბევრი მოთხოვნა: {}", msg),
         }
     }
 }
@@ -86,6 +88,7 @@ impl IntoResponse for AppError {
                 (StatusCode::UNAUTHORIZED, msg.as_str())
             }
             AppError::Forbidden(ref msg) => (StatusCode::FORBIDDEN, msg.as_str()),
+            AppError::TooManyRequests(ref msg) => (StatusCode::TOO_MANY_REQUESTS, msg.as_str()),
         };
 
         let body = Json(json!({
