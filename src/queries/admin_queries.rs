@@ -459,6 +459,18 @@ pub async fn get_order_creators(
     Ok(creators.into_iter().map(|c| (c.id, c)).collect())
 }
 
+pub async fn list_order_creators(pool: &PgPool) -> Result<Vec<OrderCreator>> {
+    let creators = sqlx::query_as::<_, OrderCreator>(
+        "SELECT id, name, email FROM users
+         WHERE id IN (SELECT DISTINCT created_by_user_id FROM orders WHERE created_by_user_id IS NOT NULL)
+         ORDER BY name, id",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(creators)
+}
+
 pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearchResponse> {
     let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
     let offset = params.offset.unwrap_or(0);

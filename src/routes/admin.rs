@@ -1142,6 +1142,11 @@ pub async fn delete_cable_variant(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn get_order_creators(State(state): State<AppState>) -> Result<Json<Vec<OrderCreator>>> {
+    let creators = admin_queries::list_order_creators(&state.db).await?;
+    Ok(Json(creators))
+}
+
 pub async fn get_orders(
     State(state): State<AppState>,
     Query(params): Query<OrderQuery>,
