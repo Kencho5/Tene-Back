@@ -683,6 +683,21 @@ pub async fn update_category(
     Ok(Json(category))
 }
 
+pub async fn move_category(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<MoveCategoryRequest>,
+) -> Result<StatusCode> {
+    if !category_queries::move_category(&state.db, id, payload.direction).await? {
+        return Err(AppError::NotFound(format!(
+            "კატეგორია id-ით {} ვერ მოიძებნა",
+            id
+        )));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn delete_category(
     State(state): State<AppState>,
     Path(id): Path<i32>,

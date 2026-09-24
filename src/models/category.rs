@@ -54,6 +54,18 @@ pub struct UpdateCategoryRequest {
     pub enabled: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MoveDirection {
+    Up,
+    Down,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MoveCategoryRequest {
+    pub direction: MoveDirection,
+}
+
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct CategoryFacetValue {
     pub id: i32,

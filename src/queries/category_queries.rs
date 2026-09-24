@@ -8,7 +8,7 @@ use crate::{
     error::Result,
     models::{
         Category, CategoryFacetValue, CategoryImage, CategoryTree, CategoryWithChildren,
-        CreateCategoryRequest, UpdateCategoryRequest,
+        CreateCategoryRequest, MoveDirection, UpdateCategoryRequest,
     },
 };
 
@@ -186,6 +186,60 @@ pub async fn update_category(
         .await?;
 
     Ok(category)
+}
+
+pub async fn move_category(pool: &PgPool, id: i32, direction: MoveDirection) -> Result<bool> {
+    let mut tx = pool.begin().await?;
+
+    let Some(category) =
+        sqlx::query_as::<_, Category>("SELECT * FROM categories WHERE id = $1 FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?
+    else {
+        return Ok(false);
+    };
+
+    let mut sibling_ids: Vec<i32> = sqlx::query_scalar(
+        "SELECT id FROM categories
+         WHERE parent_id IS NOT DISTINCT FROM $1
+         ORDER BY display_order ASC, name ASC, id ASC
+         FOR UPDATE",
+    )
+    .bind(category.parent_id)
+    .fetch_all(&mut *tx)
+    .await?;
+
+    let index = sibling_ids
+        .iter()
+        .position(|&sibling_id| sibling_id == id)
+        .unwrap_or_default();
+
+    let target = match direction {
+        MoveDirection::Up => index.checked_sub(1),
+        MoveDirection::Down => Some(index + 1).filter(|&i| i < sibling_ids.len()),
+    };
+
+    if let Some(target) = target {
+        sibling_ids.swap(index, target);
+    }
+
+    let orders: Vec<i32> = (0..sibling_ids.len() as i32).collect();
+
+    sqlx::query(
+        "UPDATE categories c
+         SET display_order = v.display_order, updated_at = NOW()
+         FROM UNNEST($1::int[], $2::int[]) AS v(id, display_order)
+         WHERE c.id = v.id AND c.display_order <> v.display_order",
+    )
+    .bind(&sibling_ids)
+    .bind(&orders)
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    Ok(true)
 }
 
 pub async fn delete_category(pool: &PgPool, id: i32) -> Result<bool> {
