@@ -1241,6 +1241,17 @@ pub async fn update_order(
     }))
 }
 
+pub async fn delete_order(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<StatusCode> {
+    if admin_queries::delete_order(&state.db, id).await? == 0 {
+        return Err(AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn export_orders(
     State(state): State<AppState>,
     Query(mut params): Query<OrderQuery>,
@@ -1466,14 +1477,26 @@ pub async fn create_order(
         });
     }
 
+    if payload.delivery_price.is_some_and(|d| d < Decimal::ZERO) {
+        return Err(AppError::BadRequest(
+            "მიწოდების ფასი არ შეიძლება იყოს უარყოფითი".to_string(),
+        ));
+    }
+
+    let delivery_price = payload.delivery_price.unwrap_or(Decimal::ZERO);
     let amount_tetri = match payload.amount {
         Some(a) => a,
-        None => subtotal,
+        None => subtotal + delivery_price,
     };
     let amount_tetri = (amount_tetri * Decimal::from(100))
         .trunc()
         .to_i32()
         .ok_or_else(|| AppError::InternalError("თანხის გამოთვლა ვერ მოხერხდა".to_string()))?;
+    let delivery_price_tetri = payload
+        .delivery_price
+        .map(|d| (d * Decimal::from(100)).round().to_i32())
+        .map(|d| d.ok_or_else(|| AppError::BadRequest("არასწორი მიწოდების ფასი".to_string())))
+        .transpose()?;
 
     let order_id = format!("tene_{}", Uuid::new_v4());
     let status = payload.status.as_deref().unwrap_or("created");
@@ -1482,6 +1505,7 @@ pub async fn create_order(
         &state.db,
         &order_id,
         amount_tetri,
+        delivery_price_tetri,
         status,
         claims.user_id,
         &payload,

@@ -361,6 +361,15 @@ pub async fn delete_user(pool: &PgPool, id: i32) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
+pub async fn delete_order(pool: &PgPool, id: i32) -> Result<u64> {
+    let result = sqlx::query("DELETE FROM orders WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(result.rows_affected())
+}
+
 pub async fn update_order_status(pool: &PgPool, id: i32, status: &str) -> Result<Option<Order>> {
     let order = sqlx::query_as::<_, Order>(
         "UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
@@ -426,6 +435,11 @@ pub async fn update_order(
     if let Some(amount) = req.amount {
         separated.push("amount = ");
         separated.push_bind_unseparated(gel_to_tetri(amount)?);
+    }
+
+    if let Some(delivery_price) = req.delivery_price {
+        separated.push("delivery_price = ");
+        separated.push_bind_unseparated(gel_to_tetri(delivery_price)?);
     }
 
     separated.push("updated_at = NOW()");

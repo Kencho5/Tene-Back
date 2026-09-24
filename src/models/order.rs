@@ -106,6 +106,7 @@ pub struct Order {
     pub details: Option<String>,
     pub delivery_type: String,
     pub delivery_time: String,
+    pub delivery_price: Option<i32>,
     pub comment: Option<String>,
     pub checkout_url: Option<String>,
     pub source: String,
@@ -392,6 +393,8 @@ pub struct AdminOrderRequest {
     #[serde(default)]
     pub delivery_time: Option<String>,
     #[serde(default)]
+    pub delivery_price: Option<Decimal>,
+    #[serde(default)]
     pub comment: Option<String>,
     #[serde(default)]
     pub user_id: Option<i32>,
@@ -455,6 +458,8 @@ pub struct OrderUpdateRequest {
     pub delivery_type: Option<String>,
     #[serde(default)]
     pub delivery_time: Option<String>,
+    #[serde(default)]
+    pub delivery_price: Option<Decimal>,
     #[serde(default)]
     pub comment: Option<String>,
     #[serde(default)]
