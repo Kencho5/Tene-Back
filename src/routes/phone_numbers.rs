@@ -8,10 +8,16 @@ use rand::Rng;
 use crate::{
     AppState,
     error::{AppError, Result},
-    models::{PhoneNumberRequest, UserPhoneNumber, VerifyPhoneRequest},
+    models::{
+        PhoneNumberRequest, PhoneVerificationTokenResponse, UserPhoneNumber, VerifyPhoneRequest,
+    },
     queries::phone_queries,
     services::sms_service,
-    utils::{extractors::extract_user_id, jwt::Claims, phone::normalize_phone},
+    utils::{
+        extractors::extract_user_id,
+        jwt::{Claims, generate_phone_verification_token},
+        phone::normalize_phone,
+    },
 };
 
 pub async fn send_code(
@@ -27,6 +33,21 @@ pub async fn send_code(
         .await?;
 
     Ok(StatusCode::OK)
+}
+
+pub async fn verify_code(
+    State(state): State<AppState>,
+    Json(payload): Json<VerifyPhoneRequest>,
+) -> Result<Json<PhoneVerificationTokenResponse>> {
+    let phone_number = normalize_phone(&payload.phone_number)?;
+
+    phone_queries::check_verification_code(&state.db, &phone_number, payload.code).await?;
+    phone_queries::consume_verification_codes(&state.db, &phone_number).await?;
+
+    let verification_token =
+        generate_phone_verification_token(&phone_number, chrono::Duration::minutes(30))?;
+
+    Ok(Json(PhoneVerificationTokenResponse { verification_token }))
 }
 
 pub async fn verify_phone(

@@ -20,6 +20,11 @@ pub struct VerifyPhoneRequest {
     pub code: i32,
 }
 
+#[derive(Debug, Serialize)]
+pub struct PhoneVerificationTokenResponse {
+    pub verification_token: String,
+}
+
 #[derive(Debug, sqlx::FromRow)]
 pub struct PhoneVerificationCode {
     pub id: i32,

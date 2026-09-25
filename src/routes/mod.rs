@@ -114,6 +114,7 @@ fn checkout_routes() -> Router<AppState> {
     Router::new()
         .route("/checkout", post(orders::checkout))
         .route("/phone/send-code", post(phone_numbers::send_code))
+        .route("/phone/verify-code", post(phone_numbers::verify_code))
         .route(
             "/checkout/comment-images",
             put(orders::generate_comment_image_urls),

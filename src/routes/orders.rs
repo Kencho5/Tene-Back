@@ -21,7 +21,7 @@ use crate::{
     queries::{admin_queries, order_queries, phone_queries, products_queries, user_queries},
     services::{delivery_service, email_service, flitt_service, image_url_service, sms_service},
     utils::extractors::{LenientClaims, OptionalClaims, extract_user_id},
-    utils::jwt::Claims,
+    utils::jwt::{Claims, verify_phone_verification_token},
     utils::phone::normalize_phone,
 };
 
@@ -131,10 +131,10 @@ pub async fn checkout(
     };
 
     if !phone_already_verified {
-        let code = payload.phone_verification_code.ok_or_else(|| {
-            AppError::BadRequest("საჭიროა ტელეფონის ნომრის დადასტურება".to_string())
+        let token = payload.phone_verification_token.as_deref().ok_or_else(|| {
+            AppError::PhoneVerificationRequired("საჭიროა ტელეფონის ნომრის დადასტურება".to_string())
         })?;
-        phone_queries::check_verification_code(&state.db, &payload.phone_number, code).await?;
+        verify_phone_verification_token(token, &payload.phone_number)?;
     }
 
     let (order_items, subtotal) = build_order_items(&state, &payload).await?;
@@ -177,7 +177,6 @@ pub async fn checkout(
     .await?;
 
     if !phone_already_verified {
-        phone_queries::consume_verification_codes(&state.db, &payload.phone_number).await?;
         if let Some(user_id) = user_id {
             phone_queries::mark_phone_verified(&state.db, user_id, &payload.phone_number).await?;
         }

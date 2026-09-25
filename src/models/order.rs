@@ -229,7 +229,7 @@ pub struct CheckoutRequest {
     pub email: String,
     pub phone_number: String,
     #[serde(default)]
-    pub phone_verification_code: Option<i32>,
+    pub phone_verification_token: Option<String>,
     pub address: String,
     pub city: Option<String>,
     #[serde(default)]

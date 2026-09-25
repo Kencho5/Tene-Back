@@ -20,6 +20,7 @@ pub enum AppError {
     TokenInvalid(String),
     Forbidden(String),
     TooManyRequests(String),
+    PhoneVerificationRequired(String),
 }
 
 impl fmt::Display for AppError {
@@ -35,6 +36,7 @@ impl fmt::Display for AppError {
             AppError::TokenInvalid(msg) => write!(f, "არაავტორიზებული: {}", msg),
             AppError::Forbidden(msg) => write!(f, "აკრძალული: {}", msg),
             AppError::TooManyRequests(msg) => write!(f, "ძალიან ბევრი მოთხოვნა: {}", msg),
+            AppError::PhoneVerificationRequired(msg) => write!(f, "არასწორი მოთხოვნა: {}", msg),
         }
     }
 }
@@ -89,6 +91,10 @@ impl IntoResponse for AppError {
             }
             AppError::Forbidden(ref msg) => (StatusCode::FORBIDDEN, msg.as_str()),
             AppError::TooManyRequests(ref msg) => (StatusCode::TOO_MANY_REQUESTS, msg.as_str()),
+            AppError::PhoneVerificationRequired(ref msg) => {
+                error_code = Some("phone_verification_required");
+                (StatusCode::BAD_REQUEST, msg.as_str())
+            }
         };
 
         let body = Json(json!({

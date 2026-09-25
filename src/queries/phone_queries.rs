@@ -7,7 +7,7 @@ use crate::{
 };
 
 const CODE_EXPIRY_MINUTES: i64 = 5;
-const RESEND_COOLDOWN_SECONDS: i64 = 60;
+const RESEND_COOLDOWN_SECONDS: i64 = 30;
 const MAX_CODES_PER_HOUR: i64 = 5;
 const MAX_ATTEMPTS: i32 = 5;
 
