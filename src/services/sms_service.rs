@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 use crate::error::{AppError, Result};
+use crate::models::Order;
 
 const SMS_SEND_URL: &str = "https://smsoffice.ge/api/v2/send/";
 
@@ -26,10 +27,19 @@ pub async fn send_order_confirmation(
     api_key: &str,
     sender: &str,
     destination: &str,
-    amount_tetri: i32,
+    order: &Order,
 ) -> Result<()> {
-    let amount = format!("{}.{:02}", amount_tetri / 100, amount_tetri % 100);
-    let content = format!("თქვენი შეკვეთა მიღებულია, თანხა {amount} ₾. გმადლობთ!");
+    let amount = format!("{}.{:02}", order.amount / 100, order.amount % 100);
+    let delivery = match (order.delivery_type.as_str(), order.delivery_time.as_str()) {
+        ("pickup", _) => "თვითგატანა".to_string(),
+        (_, "same_day") => "მიწოდება იმავე დღეს".to_string(),
+        (_, "next_day") => "მიწოდება მეორე დღეს".to_string(),
+        _ => "მიწოდება".to_string(),
+    };
+    let content = format!(
+        "შეკვეთა #{} მიღებულია!\nთანხა: {amount} ₾\n{delivery}\nდეტალები გამოგზავნილია ელფოსტაზე. გმადლობთ!",
+        order.order_id
+    );
     send_sms(api_key, sender, destination, &content).await
 }
 

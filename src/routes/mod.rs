@@ -9,6 +9,7 @@ mod phone_numbers;
 mod products;
 mod register;
 mod send_code;
+mod sliders;
 mod tasks;
 mod user_addresses;
 
@@ -75,6 +76,7 @@ fn blogs_routes() -> Router<AppState> {
     Router::new()
         .route("/blogs", get(blogs::list_public_blogs))
         .route("/blogs/{slug}", get(blogs::get_public_blog))
+        .route("/sliders", get(sliders::get_public_sliders))
 }
 
 fn categories_routes() -> Router<AppState> {
@@ -228,6 +230,20 @@ fn admin_routes() -> Router<AppState> {
         .route(
             "/admin/blogs/{id}/media/{media_uuid}/thumbnail",
             patch(blogs::set_blog_media_thumbnail),
+        )
+        // sliders
+        .route("/admin/sliders", get(sliders::get_sliders))
+        .route("/admin/sliders", post(sliders::create_slider))
+        .route("/admin/sliders/{id}", put(sliders::update_slider))
+        .route("/admin/sliders/{id}", delete(sliders::delete_slider))
+        .route("/admin/sliders/{id}/move", post(sliders::move_slider))
+        .route(
+            "/admin/sliders/{id}/image",
+            put(sliders::generate_slider_image_url),
+        )
+        .route(
+            "/admin/sliders/{id}/image/{variant}",
+            delete(sliders::delete_slider_image),
         )
         // analytics
         .route("/admin/analytics", get(admin::get_analytics))

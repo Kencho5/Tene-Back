@@ -5,6 +5,7 @@ mod email;
 mod order;
 mod phone;
 mod products;
+mod slider;
 mod task;
 mod user;
 
@@ -15,5 +16,6 @@ pub use email::*;
 pub use order::*;
 pub use phone::*;
 pub use products::*;
+pub use slider::*;
 pub use task::*;
 pub use user::*;

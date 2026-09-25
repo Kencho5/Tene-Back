@@ -255,7 +255,7 @@ async fn send_order_sms(state: &AppState, order: &crate::models::Order) {
         &state.sms_api_key,
         &state.sms_sender,
         &phone_number,
-        order.amount,
+        order,
     )
     .await
     {
