@@ -18,7 +18,7 @@ pub async fn send_verification_code(
     destination: &str,
     code: i32,
 ) -> Result<()> {
-    let content = format!("Tene: თქვენი დამადასტურებელი კოდია {code}");
+    let content = format!("თქვენი დამადასტურებელი კოდია {code}");
     send_sms(api_key, sender, destination, &content).await
 }
 
@@ -29,7 +29,7 @@ pub async fn send_order_confirmation(
     amount_tetri: i32,
 ) -> Result<()> {
     let amount = format!("{}.{:02}", amount_tetri / 100, amount_tetri % 100);
-    let content = format!("Tene: თქვენი შეკვეთა მიღებულია, თანხა {amount} ₾. გმადლობთ!");
+    let content = format!("თქვენი შეკვეთა მიღებულია, თანხა {amount} ₾. გმადლობთ!");
     send_sms(api_key, sender, destination, &content).await
 }
 
