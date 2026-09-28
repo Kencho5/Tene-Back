@@ -558,6 +558,12 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         }
     }
 
+    if !params.excluded_statuses.is_empty() {
+        query_builder.push(" AND status <> ALL(");
+        query_builder.push_bind(params.excluded_statuses);
+        query_builder.push(")");
+    }
+
     query_builder.push(" AND source = ");
     query_builder.push_bind(params.source.unwrap_or(OrderSource::Web).as_str());
 

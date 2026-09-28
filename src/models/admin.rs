@@ -190,7 +190,12 @@ pub struct OrderQuery {
     pub to_date: Option<chrono::DateTime<chrono::Utc>>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    #[serde(skip)]
+    pub excluded_statuses: Vec<String>,
 }
+
+pub const OPERATOR_HIDDEN_ORDER_STATUSES: [&str; 5] =
+    ["created", "pending", "processing", "declined", "expired"];
 
 #[derive(Debug, Serialize)]
 pub struct OrderSearchResponse {

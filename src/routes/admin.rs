@@ -1162,10 +1162,21 @@ pub async fn get_order_creators(State(state): State<AppState>) -> Result<Json<Ve
     Ok(Json(creators))
 }
 
+fn apply_role_status_scope(claims: &Claims, params: &mut OrderQuery) {
+    if claims.role == UserRole::Operator {
+        params.excluded_statuses = OPERATOR_HIDDEN_ORDER_STATUSES
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+    }
+}
+
 pub async fn get_orders(
     State(state): State<AppState>,
-    Query(params): Query<OrderQuery>,
+    Extension(claims): Extension<Claims>,
+    Query(mut params): Query<OrderQuery>,
 ) -> Result<Json<OrderSearchResponse>> {
+    apply_role_status_scope(&claims, &mut params);
     let mut response = admin_queries::get_orders(&state.db, params).await?;
 
     let order_db_ids: Vec<i32> = response.orders.iter().map(|o| o.order.id).collect();
@@ -1254,10 +1265,13 @@ pub async fn delete_order(
 
 pub async fn export_orders(
     State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
     Query(mut params): Query<OrderQuery>,
 ) -> Result<axum::response::Response> {
     use axum::response::IntoResponse;
     use rust_xlsxwriter::{Format, Workbook};
+
+    apply_role_status_scope(&claims, &mut params);
 
     params.limit = Some(i64::MAX);
     params.offset = Some(0);
