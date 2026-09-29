@@ -33,7 +33,7 @@ pub async fn send_order_confirmation(
     let delivery = match (order.delivery_type.as_str(), order.delivery_time.as_str()) {
         ("pickup", _) => "თვითგატანა".to_string(),
         (_, "same_day") => "მიწოდება იმავე დღეს".to_string(),
-        (_, "next_day") => "მიწოდება მეორე დღეს".to_string(),
+        (_, "next_day") => "მიწოდება მომდევნო სამუშაო დღეს".to_string(),
         _ => "მიწოდება".to_string(),
     };
     let content = format!(

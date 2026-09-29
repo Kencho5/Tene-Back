@@ -155,7 +155,7 @@ fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
 
     let delivery_time_label = match order.delivery_time.as_str() {
         "same_day" => "იმავე დღეს",
-        "next_day" => "მეორე დღეს",
+        "next_day" => "მომდევნო სამუშაო დღეს",
         "standard" => "სტანდარტული",
         other => other,
     };
