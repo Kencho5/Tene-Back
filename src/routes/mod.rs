@@ -132,7 +132,6 @@ fn checkout_routes() -> Router<AppState> {
 fn admin_routes() -> Router<AppState> {
     Router::new()
         // products
-        .route("/admin/products", get(admin::search_products))
         .route("/admin/products", post(admin::create_product))
         .route("/admin/products/{id}", put(admin::update_product))
         .route("/admin/products/{id}", delete(admin::delete_product))
@@ -264,6 +263,7 @@ fn admin_routes() -> Router<AppState> {
 
 fn operator_routes() -> Router<AppState> {
     Router::new()
+        .route("/admin/products", get(admin::search_products))
         .route("/admin/orders", get(admin::get_orders))
         .route("/admin/orders", post(admin::create_order))
         .route("/admin/orders/export", get(admin::export_orders))
