@@ -149,6 +149,27 @@ pub async fn find_by_ids(pool: &PgPool, ids: &[String]) -> Result<HashMap<String
     Ok(products.into_iter().map(|p| (p.id.clone(), p)).collect())
 }
 
+pub async fn find_by_ids_or_skus(
+    pool: &PgPool,
+    codes: &[String],
+) -> Result<HashMap<String, Product>> {
+    let products = sqlx::query_as::<_, Product>(
+        "SELECT p.*, b.name as brand_name
+         FROM products p LEFT JOIN brands b ON p.brand_id = b.id
+         WHERE p.id = ANY($1) OR p.sku = ANY($1)",
+    )
+    .bind(codes)
+    .fetch_all(pool)
+    .await?;
+
+    let mut map = HashMap::with_capacity(products.len() * 2);
+    for p in products {
+        map.insert(p.sku.clone(), p.clone());
+        map.insert(p.id.clone(), p);
+    }
+    Ok(map)
+}
+
 pub async fn find_images_by_product_ids(
     pool: &PgPool,
     ids: &[String],

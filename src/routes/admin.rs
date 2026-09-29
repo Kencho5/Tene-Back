@@ -1416,17 +1416,28 @@ pub async fn create_order(
     Extension(claims): Extension<Claims>,
     Json(payload): Json<AdminOrderRequest>,
 ) -> Result<Json<OrderResponse>> {
-    let product_ids: Vec<String> = payload
+    let product_codes: Vec<String> = payload
         .items
         .iter()
-        .filter_map(|i| i.product_id.clone())
+        .filter_map(|i| i.product_id.as_deref().map(str::trim))
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
         .collect();
 
-    let products = if product_ids.is_empty() {
+    let products = if product_codes.is_empty() {
         std::collections::HashMap::new()
     } else {
-        products_queries::find_by_ids(&state.db, &product_ids).await?
+        products_queries::find_by_ids_or_skus(&state.db, &product_codes).await?
     };
+
+    if let Some(missing) = product_codes.iter().find(|c| !products.contains_key(c.as_str())) {
+        return Err(AppError::BadRequest(format!(
+            "პროდუქტი {} ვერ მოიძებნა",
+            missing
+        )));
+    }
+
+    let product_ids: Vec<String> = products.values().map(|p| p.id.clone()).collect();
 
     let images = if product_ids.is_empty() {
         std::collections::HashMap::new()
@@ -1440,8 +1451,8 @@ pub async fn create_order(
     for item in &payload.items {
         let product = item
             .product_id
-            .as_ref()
-            .and_then(|id| products.get(id.as_str()));
+            .as_deref()
+            .and_then(|id| products.get(id.trim()));
 
         let quantity = item.quantity.unwrap_or(1);
 
@@ -1461,10 +1472,8 @@ pub async fn create_order(
             .or_else(|| product.map(|p| p.name.clone()))
             .unwrap_or_default();
 
-        let image = item
-            .product_id
-            .as_ref()
-            .and_then(|id| images.get(id.as_str()))
+        let image = product
+            .and_then(|p| images.get(p.id.as_str()))
             .and_then(|imgs| match &item.color {
                 Some(color) => imgs
                     .iter()
@@ -1478,7 +1487,7 @@ pub async fn create_order(
         subtotal += price * Decimal::from(quantity);
 
         order_items.push(OrderItemData {
-            product_id: item.product_id.clone().filter(|id| !id.is_empty()),
+            product_id: product.map(|p| p.id.clone()),
             color: item.color.clone(),
             quantity,
             price,
