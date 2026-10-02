@@ -1348,6 +1348,7 @@ pub async fn export_orders(
             Some("transfer_extra") => "ჩარიცხვა (დამატებითი)",
             Some("card") => "ბარათი",
             Some("cash_on_delivery") => "გადახდა ადგილზე",
+            Some("consignment") => "კონსიგნაცია",
             _ => "",
         };
 

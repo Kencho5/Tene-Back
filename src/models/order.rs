@@ -290,6 +290,7 @@ pub enum PaymentMethod {
     TransferExtra,
     Card,
     CashOnDelivery,
+    Consignment,
 }
 
 impl PaymentMethod {
@@ -306,6 +307,7 @@ impl PaymentMethod {
             PaymentMethod::TransferExtra => "transfer_extra",
             PaymentMethod::Card => "card",
             PaymentMethod::CashOnDelivery => "cash_on_delivery",
+            PaymentMethod::Consignment => "consignment",
         }
     }
 }
