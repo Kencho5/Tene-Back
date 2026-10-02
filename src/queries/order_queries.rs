@@ -203,6 +203,85 @@ pub async fn create_admin_order(
     .fetch_one(&mut *tx)
     .await?;
 
+    insert_order_items(&mut tx, order.id, items).await?;
+
+    tx.commit().await?;
+    Ok(order)
+}
+
+pub async fn replace_admin_order(
+    pool: &PgPool,
+    id: i32,
+    amount: i32,
+    delivery_price: Option<i32>,
+    status: &str,
+    req: &AdminOrderRequest,
+    items: &[OrderItemData],
+) -> Result<Order> {
+    let mut tx = pool.begin().await?;
+
+    let customer_type = req.customer_type.as_deref().unwrap_or_else(|| {
+        if req.organization_name.is_some() {
+            "company"
+        } else {
+            "individual"
+        }
+    });
+
+    let order = sqlx::query_as::<_, Order>(
+        "UPDATE orders SET amount = $1, status = $2, customer_type = $3, customer_name = $4,
+         customer_surname = $5, organization_type = $6, organization_name = $7, organization_code = $8,
+         email = $9, phone_number = $10, address = $11, city = $12, region = $13, details = $14,
+         delivery_type = $15, delivery_time = $16, comment = $17, payment_method = $18,
+         fulfillment_method = $19, personal_number = $20, source_comment = $21,
+         is_installment_sale = $22, is_product_exchange = $23, delivery_price = $24, updated_at = NOW()
+         WHERE id = $25
+         RETURNING *",
+    )
+    .bind(amount)
+    .bind(status)
+    .bind(customer_type)
+    .bind(req.customer_name.as_deref())
+    .bind(req.customer_surname.as_deref())
+    .bind(req.organization_type.as_deref())
+    .bind(req.organization_name.as_deref())
+    .bind(req.organization_code.as_deref())
+    .bind(req.email.as_deref().unwrap_or(""))
+    .bind(req.phone_number.as_deref().unwrap_or(""))
+    .bind(req.address.as_deref().unwrap_or(""))
+    .bind(req.city.as_deref())
+    .bind(req.region.as_deref())
+    .bind(req.details.as_deref())
+    .bind(req.delivery_type.as_deref().unwrap_or(""))
+    .bind(req.delivery_time.as_deref().unwrap_or(""))
+    .bind(req.comment.as_deref())
+    .bind(req.payment_method.map(|m| m.as_str()))
+    .bind(req.fulfillment_method.map(|m| m.as_str()))
+    .bind(req.personal_number.as_deref())
+    .bind(req.source_comment.as_deref())
+    .bind(req.is_installment_sale)
+    .bind(req.is_product_exchange)
+    .bind(delivery_price)
+    .bind(id)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    sqlx::query("DELETE FROM order_items WHERE order_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+
+    insert_order_items(&mut tx, id, items).await?;
+
+    tx.commit().await?;
+    Ok(order)
+}
+
+async fn insert_order_items(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    order_db_id: i32,
+    items: &[OrderItemData],
+) -> Result<()> {
     if !items.is_empty() {
         let product_ids: Vec<Option<&str>> =
             items.iter().map(|i| i.product_id.as_deref()).collect();
@@ -219,7 +298,7 @@ pub async fn create_admin_order(
             "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image, cable_config)
              SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[]), unnest($8::jsonb[])",
         )
-        .bind(order.id)
+        .bind(order_db_id)
         .bind(&product_ids)
         .bind(&colors)
         .bind(&quantities)
@@ -227,12 +306,11 @@ pub async fn create_admin_order(
         .bind(&product_names)
         .bind(&product_images)
         .bind(&cable_configs)
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
     }
 
-    tx.commit().await?;
-    Ok(order)
+    Ok(())
 }
 
 pub async fn update_order_status_and_deduct_stock(

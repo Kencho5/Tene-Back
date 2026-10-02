@@ -269,6 +269,8 @@ fn operator_routes() -> Router<AppState> {
         .route("/admin/orders/export", get(admin::export_orders))
         .route("/admin/orders/creators", get(admin::get_order_creators))
         .route("/admin/orders/{id}", patch(admin::update_order))
+        .route("/admin/orders/{id}", get(admin::get_order))
+        .route("/admin/orders/{id}", put(admin::replace_order))
         .route(
             "/admin/orders/{id}/status",
             patch(admin::update_order_status),

@@ -1232,24 +1232,7 @@ pub async fn update_order(
         .await?
         .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
 
-    let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
-    let comment_image_rows =
-        order_queries::get_comment_images_for_orders(&state.db, &[order.id]).await?;
-    let comment_images = super::orders::build_comment_images(&state, comment_image_rows);
-
-    let created_by = match order.created_by_user_id {
-        Some(user_id) => admin_queries::get_order_creators(&state.db, &[user_id])
-            .await?
-            .remove(&user_id),
-        None => None,
-    };
-
-    Ok(Json(OrderResponse {
-        order,
-        items,
-        comment_images,
-        created_by,
-    }))
+    Ok(Json(build_order_response(&state, order).await?))
 }
 
 pub async fn delete_order(
@@ -1412,11 +1395,10 @@ pub async fn export_orders(
     Ok((headers, buffer).into_response())
 }
 
-pub async fn create_order(
-    State(state): State<AppState>,
-    Extension(claims): Extension<Claims>,
-    Json(payload): Json<AdminOrderRequest>,
-) -> Result<Json<OrderResponse>> {
+async fn prepare_admin_order(
+    state: &AppState,
+    payload: &AdminOrderRequest,
+) -> Result<(Vec<OrderItemData>, i32, Option<i32>)> {
     let product_codes: Vec<String> = payload
         .items
         .iter()
@@ -1521,6 +1503,87 @@ pub async fn create_order(
         .map(|d| (d * Decimal::from(100)).round().to_i32())
         .map(|d| d.ok_or_else(|| AppError::BadRequest("არასწორი მიწოდების ფასი".to_string())))
         .transpose()?;
+
+    Ok((order_items, amount_tetri, delivery_price_tetri))
+}
+
+async fn build_order_response(state: &AppState, order: Order) -> Result<OrderResponse> {
+    let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
+    let comment_image_rows =
+        order_queries::get_comment_images_for_orders(&state.db, &[order.id]).await?;
+    let comment_images = super::orders::build_comment_images(state, comment_image_rows);
+
+    let created_by = match order.created_by_user_id {
+        Some(user_id) => admin_queries::get_order_creators(&state.db, &[user_id])
+            .await?
+            .remove(&user_id),
+        None => None,
+    };
+
+    Ok(OrderResponse {
+        order,
+        items,
+        comment_images,
+        created_by,
+    })
+}
+
+pub async fn get_order(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+) -> Result<Json<OrderResponse>> {
+    let order = admin_queries::get_order(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
+
+    Ok(Json(build_order_response(&state, order).await?))
+}
+
+pub async fn replace_order(
+    State(state): State<AppState>,
+    Path(id): Path<i32>,
+    Json(payload): Json<AdminOrderRequest>,
+) -> Result<Json<OrderResponse>> {
+    let existing = admin_queries::get_order(&state.db, id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
+
+    if existing.source != OrderSource::Admin.as_str() {
+        return Err(AppError::BadRequest(
+            "მხოლოდ ხელით დამატებული შეკვეთის რედაქტირებაა შესაძლებელი".to_string(),
+        ));
+    }
+
+    let (order_items, amount_tetri, delivery_price_tetri) =
+        prepare_admin_order(&state, &payload).await?;
+    let status = payload.status.as_deref().unwrap_or(&existing.status);
+
+    let order = order_queries::replace_admin_order(
+        &state.db,
+        id,
+        amount_tetri,
+        delivery_price_tetri,
+        status,
+        &payload,
+        &order_items,
+    )
+    .await?;
+
+    if !payload.comment_image_uuids.is_empty() {
+        order_queries::attach_comment_images(&state.db, order.id, &payload.comment_image_uuids)
+            .await?;
+    }
+
+    Ok(Json(build_order_response(&state, order).await?))
+}
+
+pub async fn create_order(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<AdminOrderRequest>,
+) -> Result<Json<OrderResponse>> {
+    let (order_items, amount_tetri, delivery_price_tetri) =
+        prepare_admin_order(&state, &payload).await?;
 
     let order_id = format!("tene_{}", Uuid::new_v4());
     let status = payload.status.as_deref().unwrap_or("created");

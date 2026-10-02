@@ -370,6 +370,14 @@ pub async fn delete_order(pool: &PgPool, id: i32) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
+pub async fn get_order(pool: &PgPool, id: i32) -> Result<Option<Order>> {
+    let order = sqlx::query_as::<_, Order>("SELECT * FROM orders WHERE id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(order)
+}
+
 pub async fn update_order_status(pool: &PgPool, id: i32, status: &str) -> Result<Option<Order>> {
     let order = sqlx::query_as::<_, Order>(
         "UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
