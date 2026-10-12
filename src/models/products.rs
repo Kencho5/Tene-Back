@@ -137,6 +137,8 @@ pub struct ProductQuery {
     pub parent_category_id: Vec<i32>,
     #[serde(default, deserialize_with = "deserialize_i32_vec")]
     pub child_category_id: Vec<i32>,
+    #[serde(default, deserialize_with = "deserialize_i32_vec")]
+    pub cable_type_id: Vec<i32>,
     pub sort_by: Option<SortBy>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,

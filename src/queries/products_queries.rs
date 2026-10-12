@@ -373,6 +373,12 @@ pub async fn search_products(
         qb.push_bind(brand_id);
     }
 
+    if !params.cable_type_id.is_empty() {
+        qb.push(" AND p.cable_type_id = ANY(");
+        qb.push_bind(&params.cable_type_id);
+        qb.push(")");
+    }
+
     if !params.color.is_empty() {
         qb.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
         qb.push_bind(&params.color);
@@ -669,6 +675,11 @@ pub async fn get_product_facets(pool: &PgPool, params: ProductQuery) -> Result<P
     if let Some(max_price) = params.price_to {
         qb.push(" AND p.price <= ");
         qb.push_bind(max_price);
+    }
+    if !params.cable_type_id.is_empty() {
+        qb.push(" AND p.cable_type_id = ANY(");
+        qb.push_bind(&params.cable_type_id);
+        qb.push(")");
     }
     if !params.color.is_empty() {
         qb.push(" AND EXISTS (SELECT 1 FROM product_images pi WHERE pi.product_id = p.id AND pi.color = ANY(");
