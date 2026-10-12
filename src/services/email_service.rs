@@ -7,6 +7,7 @@ use crate::{
 };
 
 const SENDER_EMAIL: &str = "Tene <support@tene.ge>";
+const OPERATOR_EMAIL: &str = "meeters@tene.ge";
 
 pub async fn send_verification_email(
     ses_client: &SesClient,
@@ -40,29 +41,13 @@ pub async fn send_order_confirmation_email(
 
 pub async fn send_operator_order_notification(
     ses_client: &SesClient,
-    operator_emails: &[String],
     order: &Order,
     items: &[OrderItem],
 ) -> Result<()> {
-    if operator_emails.is_empty() {
-        return Ok(());
-    }
-
     let html = render_order_confirmation(order, items);
     let subject = format!("ახალი შეკვეთა {}", order.order_id);
 
-    for recipient in operator_emails {
-        if let Err(e) = send_email(ses_client, SENDER_EMAIL, recipient, &subject, &html).await {
-            tracing::error!(
-                "Failed to send operator notification to {} for order {}: {:?}",
-                recipient,
-                order.order_id,
-                e
-            );
-        }
-    }
-
-    Ok(())
+    send_email(ses_client, SENDER_EMAIL, OPERATOR_EMAIL, &subject, &html).await
 }
 
 fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {

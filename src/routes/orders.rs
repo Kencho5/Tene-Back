@@ -18,7 +18,7 @@ use crate::{
         CheckoutResponse, CommentImage, CommentImageUploadUrl, CommentImageUrlRequest,
         CommentImageUrlResponse, OrderCommentImage, OrderItemData, OrderResponse,
     },
-    queries::{admin_queries, order_queries, phone_queries, products_queries, user_queries},
+    queries::{order_queries, phone_queries, products_queries, user_queries},
     services::{delivery_service, email_service, flitt_service, image_url_service, sms_service},
     utils::extractors::{LenientClaims, OptionalClaims, extract_user_id},
     utils::jwt::{Claims, verify_phone_verification_token},
@@ -286,28 +286,14 @@ async fn send_order_emails(state: &AppState, order: &crate::models::Order) {
         );
     }
 
-    match admin_queries::get_operator_emails(&state.db).await {
-        Ok(operator_emails) => {
-            if let Err(e) = email_service::send_operator_order_notification(
-                &state.ses_client,
-                &operator_emails,
-                order,
-                &items,
-            )
-            .await
-            {
-                tracing::error!(
-                    "Failed to send operator notification for {}: {:?}",
-                    order.order_id,
-                    e
-                );
-            }
-        }
-        Err(e) => tracing::error!(
-            "Failed to load operator emails for {}: {:?}",
+    if let Err(e) =
+        email_service::send_operator_order_notification(&state.ses_client, order, &items).await
+    {
+        tracing::error!(
+            "Failed to send operator notification for {}: {:?}",
             order.order_id,
             e
-        ),
+        );
     }
 }
 
