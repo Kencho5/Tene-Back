@@ -50,7 +50,7 @@ pub async fn send_order_shipped(
     order: &Order,
 ) -> Result<()> {
     let content = format!(
-        "თქვენი შეკვეთა #{} კურიერს გადაეცა და უკვე გზაშია. გმადლობთ!",
+        "თქვენი შეკვეთა #{} გადაეცა საკურიერო კომპანიას",
         order.order_id
     );
     send_sms(api_key, sender, destination, &content).await
