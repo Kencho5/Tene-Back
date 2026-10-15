@@ -1605,6 +1605,8 @@ pub async fn create_order(
             .await?;
     }
 
+    super::orders::send_order_sms(&state, &order).await;
+
     let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
     let comment_image_rows =
         order_queries::get_comment_images_for_orders(&state.db, &[order.id]).await?;

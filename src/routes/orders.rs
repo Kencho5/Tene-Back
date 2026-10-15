@@ -238,7 +238,7 @@ async fn send_order_notifications(state: &AppState, order: &crate::models::Order
     send_order_emails(state, order).await;
 }
 
-async fn send_order_sms(state: &AppState, order: &crate::models::Order) {
+pub(crate) async fn send_order_sms(state: &AppState, order: &crate::models::Order) {
     let phone_number = match normalize_phone(&order.phone_number) {
         Ok(phone_number) => phone_number,
         Err(_) => {
