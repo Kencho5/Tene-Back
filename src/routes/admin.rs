@@ -1210,11 +1210,28 @@ pub async fn update_order_status(
         return Err(AppError::BadRequest("სტატუსი აუცილებელია".to_string()));
     }
 
+    let previous_status = get_order_status(&state, id).await?;
+
     let order = admin_queries::update_order_status(&state.db, id, status)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
 
+    notify_if_shipped(&state, Some(&previous_status), &order).await;
+
     Ok(Json(order))
+}
+
+async fn get_order_status(state: &AppState, id: i32) -> Result<String> {
+    admin_queries::get_order(&state.db, id)
+        .await?
+        .map(|order| order.status)
+        .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))
+}
+
+async fn notify_if_shipped(state: &AppState, previous_status: Option<&str>, order: &Order) {
+    if order.status == "shipped" && previous_status != Some("shipped") {
+        super::orders::send_order_shipped_sms(state, order).await;
+    }
 }
 
 pub async fn update_order(
@@ -1228,9 +1245,13 @@ pub async fn update_order(
         return Err(AppError::BadRequest("სტატუსი აუცილებელია".to_string()));
     }
 
+    let previous_status = get_order_status(&state, id).await?;
+
     let order = admin_queries::update_order(&state.db, id, &payload)
         .await?
         .ok_or_else(|| AppError::NotFound(format!("შეკვეთა id-ით {} ვერ მოიძებნა", id)))?;
+
+    notify_if_shipped(&state, Some(&previous_status), &order).await;
 
     Ok(Json(build_order_response(&state, order).await?))
 }
@@ -1574,6 +1595,8 @@ pub async fn replace_order(
             .await?;
     }
 
+    notify_if_shipped(&state, Some(&existing.status), &order).await;
+
     Ok(Json(build_order_response(&state, order).await?))
 }
 
@@ -1606,6 +1629,7 @@ pub async fn create_order(
     }
 
     super::orders::send_order_sms(&state, &order).await;
+    notify_if_shipped(&state, None, &order).await;
 
     let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
     let comment_image_rows =

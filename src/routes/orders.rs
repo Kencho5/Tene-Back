@@ -238,17 +238,40 @@ async fn send_order_notifications(state: &AppState, order: &crate::models::Order
     send_order_emails(state, order).await;
 }
 
-pub(crate) async fn send_order_sms(state: &AppState, order: &crate::models::Order) {
-    let phone_number = match normalize_phone(&order.phone_number) {
-        Ok(phone_number) => phone_number,
+fn order_sms_phone(order: &crate::models::Order) -> Option<String> {
+    match normalize_phone(&order.phone_number) {
+        Ok(phone_number) => Some(phone_number),
         Err(_) => {
             tracing::warn!(
                 "Skipping order SMS for {}: invalid phone {}",
                 order.order_id,
                 order.phone_number
             );
-            return;
+            None
         }
+    }
+}
+
+pub(crate) async fn send_order_shipped_sms(state: &AppState, order: &crate::models::Order) {
+    let Some(phone_number) = order_sms_phone(order) else {
+        return;
+    };
+
+    if let Err(e) = sms_service::send_order_shipped(
+        &state.sms_api_key,
+        &state.sms_sender,
+        &phone_number,
+        order,
+    )
+    .await
+    {
+        tracing::error!("Failed to send shipped SMS for {}: {:?}", order.order_id, e);
+    }
+}
+
+pub(crate) async fn send_order_sms(state: &AppState, order: &crate::models::Order) {
+    let Some(phone_number) = order_sms_phone(order) else {
+        return;
     };
 
     if let Err(e) = sms_service::send_order_confirmation(

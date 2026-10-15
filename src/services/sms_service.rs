@@ -43,6 +43,19 @@ pub async fn send_order_confirmation(
     send_sms(api_key, sender, destination, &content).await
 }
 
+pub async fn send_order_shipped(
+    api_key: &str,
+    sender: &str,
+    destination: &str,
+    order: &Order,
+) -> Result<()> {
+    let content = format!(
+        "თქვენი შეკვეთა #{} კურიერს გადაეცა და უკვე გზაშია. გმადლობთ!",
+        order.order_id
+    );
+    send_sms(api_key, sender, destination, &content).await
+}
+
 async fn send_sms(api_key: &str, sender: &str, destination: &str, content: &str) -> Result<()> {
     let response = reqwest::Client::new()
         .post(SMS_SEND_URL)
