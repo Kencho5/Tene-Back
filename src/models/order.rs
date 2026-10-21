@@ -291,6 +291,7 @@ pub enum PaymentMethod {
     Card,
     CashOnDelivery,
     Consignment,
+    Gift,
 }
 
 impl PaymentMethod {
@@ -308,6 +309,7 @@ impl PaymentMethod {
             PaymentMethod::Card => "card",
             PaymentMethod::CashOnDelivery => "cash_on_delivery",
             PaymentMethod::Consignment => "consignment",
+            PaymentMethod::Gift => "gift",
         }
     }
 }
@@ -414,6 +416,8 @@ pub struct AdminOrderRequest {
     pub is_product_exchange: bool,
     #[serde(default)]
     pub is_fina_cleared: bool,
+    #[serde(default)]
+    pub created_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub items: Vec<AdminOrderItemRequest>,
     #[serde(default)]

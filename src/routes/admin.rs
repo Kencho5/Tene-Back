@@ -1353,6 +1353,7 @@ pub async fn export_orders(
             Some("card") => "ბარათი",
             Some("cash_on_delivery") => "გადახდა ადგილზე",
             Some("consignment") => "კონსიგნაცია",
+            Some("gift") => "საჩუქარი",
             _ => "",
         };
 
