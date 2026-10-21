@@ -255,14 +255,10 @@ pub fn escape_like(s: &str) -> String {
 }
 
 pub fn push_code_match(qb: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>, column: &str, q: &str) {
-    let code_like = format!("{}%", escape_like(q.trim()));
+    let code_like = format!("%{}%", escape_like(q.trim()));
     qb.push(" OR ");
     qb.push(column);
     qb.push(" ILIKE ");
-    qb.push_bind(code_like.clone());
-    qb.push(" OR regexp_replace(");
-    qb.push(column);
-    qb.push(", '^[A-Za-z]+[-_ ]?', '') ILIKE ");
     qb.push_bind(code_like);
 }
 
