@@ -182,6 +182,7 @@ pub struct OrderQuery {
     pub fulfillment_method: Option<String>,
     pub city: Option<String>,
     pub is_fina_cleared: Option<bool>,
+    pub is_payment_received: Option<bool>,
     pub is_installment_sale: Option<bool>,
     pub is_product_exchange: Option<bool>,
     pub min_amount: Option<Decimal>,

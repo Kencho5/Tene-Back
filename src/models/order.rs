@@ -119,6 +119,7 @@ pub struct Order {
     pub is_installment_sale: bool,
     pub is_product_exchange: bool,
     pub is_fina_cleared: bool,
+    pub is_payment_received: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -433,6 +434,8 @@ pub struct OrderUpdateRequest {
     pub status: Option<String>,
     #[serde(default)]
     pub is_fina_cleared: Option<bool>,
+    #[serde(default)]
+    pub is_payment_received: Option<bool>,
     #[serde(default)]
     pub secondary_phone_number: Option<String>,
     #[serde(default)]

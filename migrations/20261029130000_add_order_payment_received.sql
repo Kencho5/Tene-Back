@@ -1,0 +1,2 @@
+ALTER TABLE orders
+    ADD COLUMN is_payment_received BOOLEAN NOT NULL DEFAULT FALSE;

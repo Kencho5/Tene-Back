@@ -407,6 +407,7 @@ pub async fn update_order(
 
     set_field!("status", req.status.as_deref());
     set_field!("is_fina_cleared", req.is_fina_cleared);
+    set_field!("is_payment_received", req.is_payment_received);
     set_field!("payment_method", req.payment_method.map(|m| m.as_str()));
     set_field!(
         "fulfillment_method",
@@ -590,6 +591,7 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
 
     for (column, value) in [
         ("is_fina_cleared", params.is_fina_cleared),
+        ("is_payment_received", params.is_payment_received),
         ("is_installment_sale", params.is_installment_sale),
         ("is_product_exchange", params.is_product_exchange),
     ] {
