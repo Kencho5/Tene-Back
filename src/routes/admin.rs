@@ -1417,10 +1417,43 @@ pub async fn export_orders(
     Ok((headers, buffer).into_response())
 }
 
+fn validate_admin_order(payload: &AdminOrderRequest) -> Result<()> {
+    let is_blank = |value: &Option<String>| value.as_deref().is_none_or(|v| v.trim().is_empty());
+
+    let error = if is_blank(&payload.phone_number) {
+        Some("ტელეფონის ნომერი აუცილებელია")
+    } else if is_blank(&payload.status) {
+        Some("სტატუსი აუცილებელია")
+    } else if payload.payment_method.is_none() && !payload.is_product_exchange {
+        Some("გადახდის ფორმა აუცილებელია")
+    } else if payload.fulfillment_method.is_none() {
+        Some("ჩაბარების მეთოდი აუცილებელია")
+    } else if is_blank(&payload.customer_type) {
+        Some("პირის ტიპი აუცილებელია")
+    } else if is_blank(&payload.delivery_type) {
+        Some("მიწოდების ტიპი აუცილებელია")
+    } else if payload.delivery_type.as_deref() == Some("delivery")
+        && is_blank(&payload.delivery_time)
+    {
+        Some("მიწოდების დრო აუცილებელია")
+    } else if payload.items.is_empty() {
+        Some("დაამატეთ მინიმუმ ერთი პროდუქტი")
+    } else {
+        None
+    };
+
+    match error {
+        Some(message) => Err(AppError::BadRequest(message.to_string())),
+        None => Ok(()),
+    }
+}
+
 async fn prepare_admin_order(
     state: &AppState,
     payload: &AdminOrderRequest,
 ) -> Result<(Vec<OrderItemData>, i32, Option<i32>)> {
+    validate_admin_order(payload)?;
+
     let product_codes: Vec<String> = payload
         .items
         .iter()

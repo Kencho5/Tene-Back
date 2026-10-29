@@ -420,6 +420,10 @@ pub async fn update_order(
     set_field!("organization_code", req.organization_code.as_deref());
     set_field!("email", req.email.as_deref());
     set_field!("phone_number", req.phone_number.as_deref());
+    set_field!(
+        "secondary_phone_number",
+        req.secondary_phone_number.as_deref()
+    );
     set_field!("address", req.address.as_deref());
     set_field!("city", req.city.as_deref());
     set_field!("region", req.region.as_deref());
@@ -520,6 +524,8 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push(" OR customer_surname ILIKE ");
         query_builder.push_bind(pattern.clone());
         query_builder.push(" OR phone_number ILIKE ");
+        query_builder.push_bind(pattern.clone());
+        query_builder.push(" OR secondary_phone_number ILIKE ");
         query_builder.push_bind(pattern.clone());
         query_builder.push(" OR email ILIKE ");
         query_builder.push_bind(pattern);

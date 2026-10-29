@@ -100,6 +100,7 @@ pub struct Order {
     pub organization_code: Option<String>,
     pub email: String,
     pub phone_number: String,
+    pub secondary_phone_number: Option<String>,
     pub address: String,
     pub city: Option<String>,
     pub region: Option<String>,
@@ -403,6 +404,8 @@ pub struct AdminOrderRequest {
     #[serde(default)]
     pub user_id: Option<i32>,
     #[serde(default)]
+    pub secondary_phone_number: Option<String>,
+    #[serde(default)]
     pub payment_method: Option<PaymentMethod>,
     #[serde(default)]
     pub fulfillment_method: Option<FulfillmentMethod>,
@@ -430,6 +433,8 @@ pub struct OrderUpdateRequest {
     pub status: Option<String>,
     #[serde(default)]
     pub is_fina_cleared: Option<bool>,
+    #[serde(default)]
+    pub secondary_phone_number: Option<String>,
     #[serde(default)]
     pub payment_method: Option<PaymentMethod>,
     #[serde(default)]

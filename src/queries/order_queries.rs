@@ -167,8 +167,9 @@ pub async fn create_admin_order(
          organization_type, organization_name, organization_code, email, phone_number, address,
          city, region, details, delivery_type, delivery_time, comment,
          source, created_by_user_id, payment_method, fulfillment_method, personal_number,
-         source_comment, is_installment_sale, is_product_exchange, is_fina_cleared, delivery_price, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, COALESCE($30, NOW()))
+         source_comment, is_installment_sale, is_product_exchange, is_fina_cleared, delivery_price, created_at,
+         secondary_phone_number)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, COALESCE($30, NOW()), $31)
          RETURNING *",
     )
     .bind(req.user_id)
@@ -201,6 +202,7 @@ pub async fn create_admin_order(
     .bind(req.is_fina_cleared)
     .bind(delivery_price)
     .bind(req.created_at)
+    .bind(req.secondary_phone_number.as_deref())
     .fetch_one(&mut *tx)
     .await?;
 
@@ -236,7 +238,7 @@ pub async fn replace_admin_order(
          delivery_type = $15, delivery_time = $16, comment = $17, payment_method = $18,
          fulfillment_method = $19, personal_number = $20, source_comment = $21,
          is_installment_sale = $22, is_product_exchange = $23, delivery_price = $24,
-         created_at = COALESCE($26, created_at), updated_at = NOW()
+         created_at = COALESCE($26, created_at), secondary_phone_number = $27, updated_at = NOW()
          WHERE id = $25
          RETURNING *",
     )
@@ -266,6 +268,7 @@ pub async fn replace_admin_order(
     .bind(delivery_price)
     .bind(id)
     .bind(req.created_at)
+    .bind(req.secondary_phone_number.as_deref())
     .fetch_one(&mut *tx)
     .await?;
 
