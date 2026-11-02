@@ -203,6 +203,10 @@ pub struct OrderSearchResponse {
     pub orders: Vec<crate::models::OrderResponse>,
     pub total: i64,
     pub total_amount: i64,
+    pub web_amount: i64,
+    pub admin_amount: i64,
+    pub web_count: i64,
+    pub admin_count: i64,
     pub limit: i64,
     pub offset: i64,
 }

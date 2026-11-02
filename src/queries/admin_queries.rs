@@ -490,15 +490,10 @@ pub async fn list_order_creators(pool: &PgPool) -> Result<Vec<OrderCreator>> {
     Ok(creators)
 }
 
-pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearchResponse> {
-    let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
-    let offset = params.offset.unwrap_or(0);
-
-    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-        "SELECT *, COUNT(*) OVER() as total_count, \
-         COALESCE(SUM(amount) OVER(), 0) as total_amount FROM orders WHERE 1=1",
-    );
-
+fn push_order_filters(
+    query_builder: &mut sqlx::QueryBuilder<'_, sqlx::Postgres>,
+    params: &OrderQuery,
+) -> Result<()> {
     if let Some(id) = params.id {
         query_builder.push(" AND id = ");
         query_builder.push_bind(id);
@@ -533,7 +528,7 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push(
             " OR EXISTS (SELECT 1 FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = orders.id AND (false",
         );
-        crate::queries::products_queries::push_code_match(&mut query_builder, "p.sku", search);
+        crate::queries::products_queries::push_code_match(query_builder, "p.sku", search);
         query_builder.push("))");
         query_builder.push(")");
     }
@@ -567,12 +562,9 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
 
     if !params.excluded_statuses.is_empty() {
         query_builder.push(" AND status <> ALL(");
-        query_builder.push_bind(params.excluded_statuses);
+        query_builder.push_bind(params.excluded_statuses.clone());
         query_builder.push(")");
     }
-
-    query_builder.push(" AND source = ");
-    query_builder.push_bind(params.source.unwrap_or(OrderSource::Web).as_str());
 
     if let Some(created_by) = params.created_by_user_id {
         query_builder.push(" AND created_by_user_id = ");
@@ -623,6 +615,33 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         query_builder.push_bind(to_date);
     }
 
+    Ok(())
+}
+
+pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearchResponse> {
+    let limit = params.limit.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE);
+    let offset = params.offset.unwrap_or(0);
+
+    let mut totals_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT \
+         COALESCE(SUM(amount) FILTER (WHERE source = 'web'), 0)::BIGINT, \
+         COALESCE(SUM(amount) FILTER (WHERE source = 'admin'), 0)::BIGINT, \
+         COUNT(*) FILTER (WHERE source = 'web'), \
+         COUNT(*) FILTER (WHERE source = 'admin') \
+         FROM orders WHERE 1=1",
+    );
+    push_order_filters(&mut totals_builder, &params)?;
+    let (web_amount, admin_amount, web_count, admin_count): (i64, i64, i64, i64) =
+        totals_builder.build_query_as().fetch_one(pool).await?;
+
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT *, COUNT(*) OVER() as total_count FROM orders WHERE 1=1",
+    );
+    push_order_filters(&mut query_builder, &params)?;
+
+    query_builder.push(" AND source = ");
+    query_builder.push_bind(params.source.unwrap_or(OrderSource::Web).as_str());
+
     query_builder.push(" ORDER BY created_at DESC");
     query_builder.push(" LIMIT ");
     query_builder.push_bind(limit);
@@ -634,7 +653,6 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         #[sqlx(flatten)]
         order: Order,
         total_count: i64,
-        total_amount: i64,
     }
 
     let results = query_builder
@@ -643,7 +661,6 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
         .await?;
 
     let total = results.first().map(|r| r.total_count).unwrap_or(0);
-    let total_amount = results.first().map(|r| r.total_amount).unwrap_or(0);
     let orders: Vec<Order> = results.into_iter().map(|r| r.order).collect();
 
     let order_db_ids: Vec<i32> = orders.iter().map(|o| o.id).collect();
@@ -677,7 +694,11 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
     Ok(OrderSearchResponse {
         orders,
         total,
-        total_amount,
+        total_amount: web_amount + admin_amount,
+        web_amount,
+        admin_amount,
+        web_count,
+        admin_count,
         limit,
         offset,
     })
