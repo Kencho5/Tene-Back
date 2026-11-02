@@ -49,10 +49,20 @@ pub async fn send_order_shipped(
     destination: &str,
     order: &Order,
 ) -> Result<()> {
-    let content = format!(
-        "თქვენი შეკვეთა #{} გადაეცა საკურიერო კომპანიას",
-        order.order_id
-    );
+    let content = match order.status.as_str() {
+        "shipped_location" => format!(
+            "თქვენი შეკვეთა #{} გადაეცა საკურიერო კომპანიას და მოგეწოდებათ 1-2 სამუშაო დღეში",
+            order.order_id
+        ),
+        "shipped_onway" => format!(
+            "თქვენი შეკვეთა #{} გადაეცა საკურიერო კომპანიას და მოგეწოდებათ 2-3 სამუშაო დღეში",
+            order.order_id
+        ),
+        _ => format!(
+            "თქვენი შეკვეთა #{} გადაეცა საკურიერო კომპანიას",
+            order.order_id
+        ),
+    };
     send_sms(api_key, sender, destination, &content).await
 }
 

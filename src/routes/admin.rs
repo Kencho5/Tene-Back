@@ -1229,7 +1229,9 @@ async fn get_order_status(state: &AppState, id: i32) -> Result<String> {
 }
 
 async fn notify_if_shipped(state: &AppState, previous_status: Option<&str>, order: &Order) {
-    if order.status == "shipped" && previous_status != Some("shipped") {
+    const SHIPPED_STATUSES: [&str; 3] = ["shipped", "shipped_location", "shipped_onway"];
+    let is_shipped = |s: &str| SHIPPED_STATUSES.contains(&s);
+    if is_shipped(&order.status) && !previous_status.is_some_and(is_shipped) {
         super::orders::send_order_shipped_sms(state, order).await;
     }
 }
