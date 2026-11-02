@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
+use rand::Rng;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde_json::json;
 use uuid::Uuid;
@@ -24,6 +25,16 @@ use crate::{
     utils::jwt::{Claims, verify_phone_verification_token},
     utils::phone::normalize_phone,
 };
+
+const ORDER_ID_ALPHABET: &[u8] = b"23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const ORDER_ID_LEN: usize = 8;
+
+fn generate_order_id() -> String {
+    let mut rng = rand::rng();
+    (0..ORDER_ID_LEN)
+        .map(|_| ORDER_ID_ALPHABET[rng.random_range(0..ORDER_ID_ALPHABET.len())] as char)
+        .collect()
+}
 
 pub async fn track_checkout_analytics(
     State(state): State<AppState>,
@@ -163,7 +174,7 @@ pub async fn checkout(
         ));
     }
 
-    let order_id = format!("tene_{}", Uuid::new_v4());
+    let order_id = generate_order_id();
 
     let order = order_queries::create_order_with_items(
         &state.db,
