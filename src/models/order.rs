@@ -337,6 +337,7 @@ impl FulfillmentMethod {
 pub enum OrderSource {
     Web,
     Admin,
+    All,
 }
 
 impl OrderSource {
@@ -344,6 +345,7 @@ impl OrderSource {
         match self {
             OrderSource::Web => "web",
             OrderSource::Admin => "admin",
+            OrderSource::All => "all",
         }
     }
 }

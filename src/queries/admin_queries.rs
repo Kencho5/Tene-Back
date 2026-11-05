@@ -639,8 +639,11 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
     );
     push_order_filters(&mut query_builder, &params)?;
 
-    query_builder.push(" AND source = ");
-    query_builder.push_bind(params.source.unwrap_or(OrderSource::Web).as_str());
+    let source = params.source.unwrap_or(OrderSource::Web);
+    if source != OrderSource::All {
+        query_builder.push(" AND source = ");
+        query_builder.push_bind(source.as_str());
+    }
 
     query_builder.push(" ORDER BY created_at DESC");
     query_builder.push(" LIMIT ");
