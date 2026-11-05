@@ -257,20 +257,16 @@ pub struct ConversionRate {
     pub conversion_pct: Decimal,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AnalyticsPeriod {
-    Today,
-    Yesterday,
-    #[serde(rename = "7days")]
-    Last7Days,
-    #[serde(rename = "30days")]
-    Last30Days,
+#[derive(Debug, Serialize, FromRow)]
+pub struct ViewsByDay {
+    pub day: chrono::NaiveDate,
+    pub views: i64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AnalyticsQuery {
-    pub period: Option<AnalyticsPeriod>,
+    pub from_date: Option<DateTime<Utc>>,
+    pub to_date: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -279,6 +275,7 @@ pub struct AnalyticsResponse {
     pub trending_this_week: Vec<TrendingProduct>,
     pub unique_viewers: Vec<UniqueViewersProduct>,
     pub views_by_hour: Vec<ViewsByHour>,
+    pub views_by_day: Vec<ViewsByDay>,
     pub high_views_low_sales: Vec<HighViewsLowSales>,
     pub conversion_rates: Vec<ConversionRate>,
 }

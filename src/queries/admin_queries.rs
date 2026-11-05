@@ -4,13 +4,13 @@ use sqlx::PgPool;
 use crate::{
     error::{AppError, Result},
     models::{
-        AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
+        AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
         CableVariant, CableVariantRequest, CableVariantUpdate, CartSnapshotItem, CheckoutEventRow,
         CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
         HighViewsLowSales, MostViewedProduct, Order, OrderCreator, OrderQuery, OrderSearchResponse,
         OrderSource, OrderUpdateRequest, Product, ProductImage, ProductRequest, ProductSeo,
         ProductSeoRequest, TrendingProduct, UniqueViewersProduct, UserQuery, UserRequest,
-        UserResponse, UserSearchResponse, ViewsByHour,
+        UserResponse, UserSearchResponse, ViewsByDay, ViewsByHour,
     },
 };
 
@@ -708,30 +708,14 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
 }
 
 pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<AnalyticsResponse> {
-    // these fragments come from a fixed enum so no injection risk
-    let (where_pv, where_bare, join_pv) = match params.period {
-        Some(AnalyticsPeriod::Today) => (
-            "WHERE pv.viewed_at >= CURRENT_DATE",
-            "WHERE viewed_at >= CURRENT_DATE",
-            "AND pv.viewed_at >= CURRENT_DATE",
-        ),
-        Some(AnalyticsPeriod::Yesterday) => (
-            "WHERE pv.viewed_at >= CURRENT_DATE - INTERVAL '1 day' AND pv.viewed_at < CURRENT_DATE",
-            "WHERE viewed_at >= CURRENT_DATE - INTERVAL '1 day' AND viewed_at < CURRENT_DATE",
-            "AND pv.viewed_at >= CURRENT_DATE - INTERVAL '1 day' AND pv.viewed_at < CURRENT_DATE",
-        ),
-        Some(AnalyticsPeriod::Last7Days) => (
-            "WHERE pv.viewed_at >= CURRENT_DATE - INTERVAL '7 days'",
-            "WHERE viewed_at >= CURRENT_DATE - INTERVAL '7 days'",
-            "AND pv.viewed_at >= CURRENT_DATE - INTERVAL '7 days'",
-        ),
-        Some(AnalyticsPeriod::Last30Days) => (
-            "WHERE pv.viewed_at >= CURRENT_DATE - INTERVAL '30 days'",
-            "WHERE viewed_at >= CURRENT_DATE - INTERVAL '30 days'",
-            "AND pv.viewed_at >= CURRENT_DATE - INTERVAL '30 days'",
-        ),
-        None => ("", "", ""),
+    let range = |col: &str| {
+        format!("({col} >= $1::timestamptz OR $1 IS NULL) AND ({col} <= $2::timestamptz OR $2 IS NULL)")
     };
+    let where_pv = format!("WHERE {}", range("pv.viewed_at"));
+    let where_bare = format!("WHERE {}", range("viewed_at"));
+    let join_pv = format!("AND {}", range("pv.viewed_at"));
+    let where_orders = format!("WHERE {}", range("o.created_at"));
+    let (from, to) = (params.from_date, params.to_date);
 
     let most_viewed = sqlx::query_as::<_, MostViewedProduct>(&format!(
         "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
@@ -742,6 +726,8 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              ORDER BY views DESC
              LIMIT 10"
     ))
+    .bind(from)
+    .bind(to)
     .fetch_all(pool)
     .await?;
 
@@ -769,6 +755,8 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              ORDER BY total_views DESC
              LIMIT 10"
     ))
+    .bind(from)
+    .bind(to)
     .fetch_all(pool)
     .await?;
 
@@ -779,6 +767,20 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              GROUP BY hour
              ORDER BY hour"
     ))
+    .bind(from)
+    .bind(to)
+    .fetch_all(pool)
+    .await?;
+
+    let views_by_day = sqlx::query_as::<_, ViewsByDay>(&format!(
+        "SELECT viewed_at::date as day, COUNT(*) as views
+             FROM product_views
+             {where_bare}
+             GROUP BY day
+             ORDER BY day"
+    ))
+    .bind(from)
+    .bind(to)
     .fetch_all(pool)
     .await?;
 
@@ -794,22 +796,10 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              ORDER BY views DESC
              LIMIT 10"
     ))
+    .bind(from)
+    .bind(to)
     .fetch_all(pool)
     .await?;
-
-    let where_orders = match params.period {
-        Some(AnalyticsPeriod::Today) => "WHERE o.created_at >= CURRENT_DATE",
-        Some(AnalyticsPeriod::Yesterday) => {
-            "WHERE o.created_at >= CURRENT_DATE - INTERVAL '1 day' AND o.created_at < CURRENT_DATE"
-        }
-        Some(AnalyticsPeriod::Last7Days) => {
-            "WHERE o.created_at >= CURRENT_DATE - INTERVAL '7 days'"
-        }
-        Some(AnalyticsPeriod::Last30Days) => {
-            "WHERE o.created_at >= CURRENT_DATE - INTERVAL '30 days'"
-        }
-        None => "",
-    };
 
     let conversion_rates = sqlx::query_as::<_, ConversionRate>(&format!(
         "WITH view_counts AS (
@@ -822,7 +812,7 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
                  SELECT oi.product_id, COUNT(DISTINCT o.id) as purchases
                  FROM order_items oi
                  JOIN orders o ON o.id = oi.order_id
-                 {where_orders} {and_approved}
+                 {where_orders} AND o.status = 'approved'
                  GROUP BY oi.product_id
              )
              SELECT p.id as product_id, p.name as product_name,
@@ -836,13 +826,10 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
              LEFT JOIN purchase_counts pc ON pc.product_id = vc.product_id
              WHERE vc.views > 0
              ORDER BY conversion_pct DESC, viewers DESC
-             LIMIT 10",
-        and_approved = if where_orders.is_empty() {
-            "WHERE o.status = 'approved'"
-        } else {
-            "AND o.status = 'approved'"
-        },
+             LIMIT 10"
     ))
+    .bind(from)
+    .bind(to)
     .fetch_all(pool)
     .await?;
 
@@ -851,6 +838,7 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
         trending_this_week,
         unique_viewers,
         views_by_hour,
+        views_by_day,
         high_views_low_sales,
         conversion_rates,
     })
