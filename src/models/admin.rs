@@ -263,10 +263,20 @@ pub struct ViewsByDay {
     pub views: i64,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnalyticsPeriod {
+    Today,
+    Yesterday,
+    Last7Days,
+    Last30Days,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct AnalyticsQuery {
     pub from_date: Option<DateTime<Utc>>,
     pub to_date: Option<DateTime<Utc>>,
+    pub period: Option<AnalyticsPeriod>,
 }
 
 #[derive(Debug, Serialize)]

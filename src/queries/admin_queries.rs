@@ -1,10 +1,11 @@
+use chrono::{Duration, Utc};
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use sqlx::PgPool;
 
 use crate::{
     error::{AppError, Result},
     models::{
-        AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
+        AnalyticsPeriod, AnalyticsQuery, AnalyticsResponse, Brand, CableType, CableTypeRequest,
         CableVariant, CableVariantRequest, CableVariantUpdate, CartSnapshotItem, CheckoutEventRow,
         CheckoutSessionQuery, CheckoutSessionSummary, CheckoutSessionsResponse, ConversionRate,
         HighViewsLowSales, MostViewedProduct, Order, OrderCreator, OrderQuery, OrderSearchResponse,
@@ -708,6 +709,19 @@ pub async fn get_orders(pool: &PgPool, params: OrderQuery) -> Result<OrderSearch
 }
 
 pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<AnalyticsResponse> {
+    let today = Utc::now()
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .unwrap()
+        .and_utc();
+    let (from, to) = match params.period {
+        Some(AnalyticsPeriod::Today) => (Some(today), None),
+        Some(AnalyticsPeriod::Yesterday) => (Some(today - Duration::days(1)), Some(today)),
+        Some(AnalyticsPeriod::Last7Days) => (Some(today - Duration::days(7)), None),
+        Some(AnalyticsPeriod::Last30Days) => (Some(today - Duration::days(30)), None),
+        None => (params.from_date, params.to_date),
+    };
+
     let range = |col: &str| {
         format!("({col} >= $1::timestamptz OR $1 IS NULL) AND ({col} <= $2::timestamptz OR $2 IS NULL)")
     };
@@ -715,7 +729,6 @@ pub async fn get_analytics(pool: &PgPool, params: AnalyticsQuery) -> Result<Anal
     let where_bare = format!("WHERE {}", range("viewed_at"));
     let join_pv = format!("AND {}", range("pv.viewed_at"));
     let where_orders = format!("WHERE {}", range("o.created_at"));
-    let (from, to) = (params.from_date, params.to_date);
 
     let most_viewed = sqlx::query_as::<_, MostViewedProduct>(&format!(
         "SELECT pv.product_id, p.name as product_name, COUNT(*) as views
