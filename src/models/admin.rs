@@ -195,6 +195,8 @@ pub struct OrderQuery {
     pub excluded_statuses: Vec<String>,
 }
 
+pub const SOLD_ON_SITE_ORDER_STATUS: &str = "sold_on_site";
+
 pub const OPERATOR_HIDDEN_ORDER_STATUSES: [&str; 5] =
     ["created", "pending", "processing", "declined", "expired"];
 

@@ -1670,7 +1670,9 @@ pub async fn create_order(
             .await?;
     }
 
-    super::orders::send_order_sms(&state, &order).await;
+    if order.status != crate::models::SOLD_ON_SITE_ORDER_STATUS {
+        super::orders::send_order_sms(&state, &order).await;
+    }
     notify_if_shipped(&state, None, &order).await;
 
     let items = order_queries::get_items_for_orders(&state.db, &[order.id]).await?;
