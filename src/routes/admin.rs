@@ -1365,11 +1365,6 @@ pub async fn export_orders(
             _ => "",
         };
 
-        let source = match order.source.as_str() {
-            "admin" => "ხელით დამატებული",
-            _ => "საიტი",
-        };
-
         let cells: [String; 19] = [
             order.id.to_string(),
             order.order_id.clone(),
@@ -1392,7 +1387,7 @@ pub async fn export_orders(
             order.comment.clone().unwrap_or_default(),
             items,
             payment_method.to_string(),
-            source.to_string(),
+            order.source_comment.clone().unwrap_or_default(),
             o.created_by
                 .as_ref()
                 .map(|c| c.name.clone())
