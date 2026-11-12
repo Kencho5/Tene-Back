@@ -294,6 +294,7 @@ pub enum PaymentMethod {
     CashOnDelivery,
     Consignment,
     Gift,
+    No,
 }
 
 impl PaymentMethod {
@@ -312,6 +313,7 @@ impl PaymentMethod {
             PaymentMethod::CashOnDelivery => "cash_on_delivery",
             PaymentMethod::Consignment => "consignment",
             PaymentMethod::Gift => "gift",
+            PaymentMethod::No => "no",
         }
     }
 }

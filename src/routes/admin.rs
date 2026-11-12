@@ -1293,6 +1293,7 @@ pub async fn export_orders(
     let mut workbook = Workbook::new();
     let sheet = workbook.add_worksheet();
 
+    const AMOUNT_COL: usize = 4;
     let header = Format::new().set_bold();
     let headers = [
         "ID",
@@ -1362,6 +1363,7 @@ pub async fn export_orders(
             Some("cash_on_delivery") => "გადახდა ადგილზე",
             Some("consignment") => "კონსიგნაცია",
             Some("gift") => "საჩუქარი",
+            Some("no") => "no",
             _ => "",
         };
 
@@ -1375,7 +1377,7 @@ pub async fn export_orders(
                 "არა"
             }
             .to_string(),
-            (Decimal::from(order.amount) / Decimal::from(100)).to_string(),
+            String::new(),
             order.currency.clone(),
             customer,
             order.email.clone(),
@@ -1396,7 +1398,12 @@ pub async fn export_orders(
         ];
 
         for (col, value) in cells.iter().enumerate() {
-            sheet.write_string(row, col as u16, value).map_err(|e| {
+            let result = if col == AMOUNT_COL {
+                sheet.write_number(row, col as u16, order.amount as f64 / 100.0)
+            } else {
+                sheet.write_string(row, col as u16, value)
+            };
+            result.map_err(|e| {
                 AppError::InternalError(format!("excel-ის გენერაცია ვერ მოხერხდა: {}", e))
             })?;
         }
