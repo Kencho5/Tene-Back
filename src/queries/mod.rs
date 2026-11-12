@@ -1,6 +1,7 @@
 pub mod admin_queries;
 pub mod blog_queries;
 pub mod category_queries;
+pub mod combo_queries;
 pub mod email_queries;
 pub mod order_queries;
 pub mod phone_queries;

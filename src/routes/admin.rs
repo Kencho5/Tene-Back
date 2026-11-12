@@ -1545,6 +1545,7 @@ async fn prepare_admin_order(
                 .cable_config
                 .as_ref()
                 .map(|c| serde_json::json!({ "watts": c.watts, "length_cm": c.length_cm })),
+            combo: None,
         });
     }
 

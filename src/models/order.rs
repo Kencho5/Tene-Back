@@ -138,6 +138,10 @@ pub struct OrderItem {
     pub product_image: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cable_config: Option<serde_json::Value>,
+    pub combo_offer_id: Option<i32>,
+    pub combo_title: Option<String>,
+    pub combo_group: Option<String>,
+    pub regular_price: Option<Decimal>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -222,6 +226,14 @@ pub struct CartItem {
     pub color: Option<String>,
     pub quantity: i32,
     pub cable_config: Option<CableConfig>,
+    #[serde(default)]
+    pub combo: Option<CartItemCombo>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CartItemCombo {
+    pub offer_id: i32,
+    pub group: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,6 +282,14 @@ pub struct OrderItemData {
     pub product_name: String,
     pub image: serde_json::Value,
     pub cable_config: Option<serde_json::Value>,
+    pub combo: Option<OrderItemCombo>,
+}
+
+pub struct OrderItemCombo {
+    pub offer_id: i32,
+    pub title: String,
+    pub group: String,
+    pub regular_price: Decimal,
 }
 
 #[derive(Debug, Serialize)]

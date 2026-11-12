@@ -1,6 +1,7 @@
 mod admin;
 mod blog;
 mod category;
+mod combo;
 mod email;
 mod order;
 mod phone;
@@ -12,6 +13,7 @@ mod user;
 pub use admin::*;
 pub use blog::*;
 pub use category::*;
+pub use combo::*;
 pub use email::*;
 pub use order::*;
 pub use phone::*;

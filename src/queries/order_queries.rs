@@ -114,29 +114,7 @@ pub async fn create_order_with_items_raw(
     .fetch_one(&mut *tx)
     .await?;
 
-    let product_ids: Vec<Option<&str>> = items.iter().map(|i| i.product_id.as_deref()).collect();
-    let colors: Vec<Option<&str>> = items.iter().map(|i| i.color.as_deref()).collect();
-    let quantities: Vec<i32> = items.iter().map(|i| i.quantity).collect();
-    let prices: Vec<Decimal> = items.iter().map(|i| i.price).collect();
-    let product_names: Vec<&str> = items.iter().map(|i| i.product_name.as_str()).collect();
-    let product_images: Vec<serde_json::Value> = items.iter().map(|i| i.image.clone()).collect();
-    let cable_configs: Vec<Option<serde_json::Value>> =
-        items.iter().map(|i| i.cable_config.clone()).collect();
-
-    sqlx::query(
-        "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image, cable_config)
-         SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[]), unnest($8::jsonb[])",
-    )
-    .bind(order.id)
-    .bind(&product_ids)
-    .bind(&colors)
-    .bind(&quantities)
-    .bind(&prices)
-    .bind(&product_names)
-    .bind(&product_images)
-    .bind(&cable_configs)
-    .execute(&mut *tx)
-    .await?;
+    insert_order_items(&mut tx, order.id, items).await?;
 
     tx.commit().await?;
     Ok(order)
@@ -299,10 +277,24 @@ async fn insert_order_items(
             items.iter().map(|i| i.image.clone()).collect();
         let cable_configs: Vec<Option<serde_json::Value>> =
             items.iter().map(|i| i.cable_config.clone()).collect();
+        let combo_offer_ids: Vec<Option<i32>> =
+            items.iter().map(|i| i.combo.as_ref().map(|c| c.offer_id)).collect();
+        let combo_titles: Vec<Option<&str>> = items
+            .iter()
+            .map(|i| i.combo.as_ref().map(|c| c.title.as_str()))
+            .collect();
+        let combo_groups: Vec<Option<&str>> = items
+            .iter()
+            .map(|i| i.combo.as_ref().map(|c| c.group.as_str()))
+            .collect();
+        let regular_prices: Vec<Option<Decimal>> = items
+            .iter()
+            .map(|i| i.combo.as_ref().map(|c| c.regular_price))
+            .collect();
 
         sqlx::query(
-            "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image, cable_config)
-             SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[]), unnest($8::jsonb[])",
+            "INSERT INTO order_items (order_id, product_id, color, quantity, price_at_purchase, product_name, product_image, cable_config, combo_offer_id, combo_title, combo_group, regular_price)
+             SELECT $1, unnest($2::text[]), unnest($3::varchar[]), unnest($4::int[]), unnest($5::decimal[]), unnest($6::varchar[]), unnest($7::jsonb[]), unnest($8::jsonb[]), unnest($9::int[]), unnest($10::varchar[]), unnest($11::varchar[]), unnest($12::decimal[])",
         )
         .bind(order_db_id)
         .bind(&product_ids)
@@ -312,6 +304,10 @@ async fn insert_order_items(
         .bind(&product_names)
         .bind(&product_images)
         .bind(&cable_configs)
+        .bind(&combo_offer_ids)
+        .bind(&combo_titles)
+        .bind(&combo_groups)
+        .bind(&regular_prices)
         .execute(&mut **tx)
         .await?;
     }

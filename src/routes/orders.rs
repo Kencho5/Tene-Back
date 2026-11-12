@@ -17,8 +17,9 @@ use crate::{
     models::{
         CableVariant, CheckoutAnalyticsEvent, CheckoutPaymentMethod, CheckoutRequest,
         CheckoutResponse, CommentImage, CommentImageUploadUrl, CommentImageUrlRequest,
-        CommentImageUrlResponse, OrderCommentImage, OrderItemData, OrderResponse,
+        CommentImageUrlResponse, OrderCommentImage, OrderItemCombo, OrderItemData, OrderResponse,
     },
+    routes::combo_offers,
     queries::{order_queries, phone_queries, products_queries, user_queries},
     services::{delivery_service, email_service, flitt_service, image_url_service, sms_service},
     utils::extractors::{LenientClaims, OptionalClaims, extract_user_id},
@@ -477,7 +478,6 @@ async fn build_order_items(
         };
 
         let price = item_price(product.price, product.discounted_price, variant);
-        subtotal += price * Decimal::from(item.quantity);
 
         let cable_config_json = item
             .cable_config
@@ -492,10 +492,86 @@ async fn build_order_items(
             product_name: product.name.clone(),
             image: serde_json::to_value(image)?,
             cable_config: cable_config_json,
+            combo: None,
         });
     }
 
+    apply_combo_pricing(state, payload, &mut order_items).await?;
+
+    for item in &order_items {
+        subtotal += item.price * Decimal::from(item.quantity);
+    }
+
     Ok((order_items, subtotal))
+}
+
+async fn apply_combo_pricing(
+    state: &AppState,
+    payload: &CheckoutRequest,
+    order_items: &mut [OrderItemData],
+) -> Result<()> {
+    let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (index, item) in payload.items.iter().enumerate() {
+        if let Some(combo) = &item.combo {
+            groups.entry(combo.group.as_str()).or_default().push(index);
+        }
+    }
+    if groups.is_empty() {
+        return Ok(());
+    }
+
+    let mut offer_ids: Vec<i32> = payload
+        .items
+        .iter()
+        .filter_map(|i| i.combo.as_ref().map(|c| c.offer_id))
+        .collect();
+    offer_ids.sort_unstable();
+    offer_ids.dedup();
+
+    let (offers, offer_items) = combo_offers::load_offers(state, &offer_ids).await?;
+
+    for (group, indexes) in groups {
+        let offer_id = payload.items[indexes[0]].combo.as_ref().map(|c| c.offer_id);
+        let mixed = indexes
+            .iter()
+            .any(|&i| payload.items[i].combo.as_ref().map(|c| c.offer_id) != offer_id);
+        let offer_id = offer_id.unwrap_or_default();
+        if mixed || group.is_empty() || group.len() > 64 {
+            return Err(AppError::BadRequest(
+                "კომბო შეთავაზების მონაცემები არასწორია".to_string(),
+            ));
+        }
+
+        let lines: Vec<combo_offers::ComboLine> = indexes
+            .iter()
+            .map(|&i| combo_offers::ComboLine {
+                index: i,
+                product_id: payload.items[i].product_id.clone(),
+                quantity: payload.items[i].quantity,
+                regular_price: order_items[i].price,
+                has_cable_config: payload.items[i].cable_config.is_some(),
+            })
+            .collect();
+
+        let priced = combo_offers::price_combo_group(
+            offers.get(&offer_id),
+            offer_items.get(&offer_id).map(|v| v.as_slice()).unwrap_or_default(),
+            &lines,
+        )?;
+
+        for p in priced {
+            let item = &mut order_items[p.index];
+            item.combo = Some(OrderItemCombo {
+                offer_id: p.offer_id,
+                title: p.title,
+                group: group.to_string(),
+                regular_price: item.price,
+            });
+            item.price = p.price;
+        }
+    }
+
+    Ok(())
 }
 
 fn item_price(

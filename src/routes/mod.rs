@@ -1,6 +1,7 @@
 mod admin;
 mod blogs;
 mod categories;
+mod combo_offers;
 mod google_auth;
 mod health;
 mod login;
@@ -59,6 +60,10 @@ fn products_routes() -> Router<AppState> {
         .route(
             "/products/{id}/related",
             get(products::get_related_products),
+        )
+        .route(
+            "/products/{id}/combo-offers",
+            get(combo_offers::get_product_combo_offers),
         )
         .route("/brands", get(products::get_brands))
         .route("/cable-types", get(products::get_cable_types))
@@ -253,6 +258,22 @@ fn admin_routes() -> Router<AppState> {
         // top products
         .route("/admin/top-products", get(admin::get_top_products_admin))
         .route("/admin/top-products", put(admin::replace_top_products))
+        // combo offers
+        .route("/admin/combo-offers", get(combo_offers::list_combo_offers))
+        .route("/admin/combo-offers", post(combo_offers::create_combo_offer))
+        .route("/admin/combo-offers/{id}", get(combo_offers::get_combo_offer))
+        .route(
+            "/admin/combo-offers/{id}",
+            put(combo_offers::update_combo_offer),
+        )
+        .route(
+            "/admin/combo-offers/{id}",
+            delete(combo_offers::delete_combo_offer),
+        )
+        .route(
+            "/admin/combo-offers/{id}/enabled",
+            patch(combo_offers::set_combo_offer_enabled),
+        )
         // users
         .route("/admin/users", get(admin::search_users))
         .route("/admin/users/{id}", put(admin::update_user))
