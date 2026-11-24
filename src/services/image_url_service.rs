@@ -26,6 +26,37 @@ pub async fn put_object_url(
     Ok(presigned_request.uri().into())
 }
 
+pub async fn get_object_url(
+    client: &s3::Client,
+    bucket: &str,
+    object: &str,
+    download_name: Option<&str>,
+    expires_in: u64,
+) -> Result<String, s3::Error> {
+    let config = PresigningConfig::expires_in(Duration::from_secs(expires_in)).unwrap();
+
+    let mut request = client.get_object().bucket(bucket).key(object);
+    if let Some(name) = download_name {
+        let encoded: String = name
+            .bytes()
+            .map(|b| {
+                if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
+                    (b as char).to_string()
+                } else {
+                    format!("%{:02X}", b)
+                }
+            })
+            .collect();
+        request = request.response_content_disposition(format!(
+            "inline; filename*=UTF-8''{}",
+            encoded
+        ));
+    }
+
+    let presigned_request = request.presigned(config).await?;
+    Ok(presigned_request.uri().into())
+}
+
 pub async fn delete_single_object(
     client: &s3::Client,
     bucket: &str,

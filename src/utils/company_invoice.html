@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ka">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>ინვოისი {{invoice_number}}</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        background: #f6f6f6;
+        font-family: "Noto Sans Georgian", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        color: #212121;
+        padding: 24px 12px;
+      }
+      .container {
+        max-width: 680px;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 1px 8px rgba(20, 20, 20, 0.08), 0 0 1px rgba(20, 20, 20, 0.12);
+      }
+      .header {
+        background: linear-gradient(90deg, #0bb705 0%, #0ad810 100%);
+        padding: 24px 32px;
+        color: #ffffff;
+      }
+      .header-row { width: 100%; border-collapse: collapse; }
+      .brand { font-size: 24px; font-weight: 700; letter-spacing: 0.5px; }
+      .doc-title { text-align: right; font-size: 14px; opacity: 0.95; }
+      .doc-number { text-align: right; font-size: 18px; font-weight: 600; }
+      .section { padding: 24px 32px; }
+      .meta { width: 100%; border-collapse: collapse; }
+      .meta td { vertical-align: top; width: 50%; padding-bottom: 8px; }
+      .label { font-size: 12px; color: #757575; margin-bottom: 4px; }
+      .value { font-size: 14px; font-weight: 600; }
+      .sub { font-size: 13px; color: #424242; margin-top: 2px; }
+      .items { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      .items th {
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: #757575;
+        padding: 10px 8px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .items td { font-size: 14px; padding: 12px 8px; border-bottom: 1px solid #f0f0f0; }
+      .num { text-align: right; white-space: nowrap; }
+      .totals { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      .totals td { font-size: 14px; padding: 6px 8px; }
+      .totals .grand td { font-size: 18px; font-weight: 700; border-top: 1px solid #e0e0e0; padding-top: 12px; }
+      .note {
+        margin-top: 20px;
+        background: #f6f6f6;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 13px;
+        color: #424242;
+      }
+      .footer { padding: 16px 32px 24px; font-size: 12px; color: #9e9e9e; text-align: center; }
+      @media print {
+        body { background: #ffffff; padding: 0; }
+        .container { box-shadow: none; border-radius: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <table class="header-row" role="presentation">
+          <tr>
+            <td class="brand">Tene</td>
+            <td>
+              <div class="doc-title">ინვოისი</div>
+              <div class="doc-number">{{invoice_number}}</div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="section">
+        <table class="meta" role="presentation">
+          <tr>
+            <td>
+              <div class="label">მიმღები</div>
+              <div class="value">{{company_name}}</div>
+              <div class="sub">{{company_type}} · ს/კ {{identification_code}}</div>
+              {{address_block}}
+            </td>
+            <td>
+              <div class="label">გამოწერის თარიღი</div>
+              <div class="value">{{issue_date}}</div>
+              <div class="label" style="margin-top: 10px">გადახდის ვადა</div>
+              <div class="value">{{due_date}}</div>
+            </td>
+          </tr>
+        </table>
+
+        <table class="items">
+          <thead>
+            <tr>
+              <th>მომსახურება</th>
+              <th>გატანის თარიღი</th>
+              <th class="num">რაოდენობა</th>
+              <th class="num">ფასი</th>
+              <th class="num">თანხა</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{items_rows}}
+          </tbody>
+        </table>
+
+        <table class="totals" role="presentation">
+          <tr class="grand">
+            <td>გადასახდელი თანხა</td>
+            <td class="num">{{total}} ₾</td>
+          </tr>
+        </table>
+
+        {{payment_terms_block}}
+      </div>
+
+      <div class="footer">Tene · tene.ge</div>
+    </div>
+  </body>
+</html>

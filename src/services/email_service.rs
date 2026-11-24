@@ -21,11 +21,20 @@ pub async fn send_verification_email(
     send_email(
         ses_client,
         sender_email,
-        recipient,
+        &[recipient],
         "Verify Your Email",
         &html,
     )
     .await
+}
+
+pub async fn send_html_email(
+    ses_client: &SesClient,
+    recipients: &[&str],
+    subject: &str,
+    html: &str,
+) -> Result<()> {
+    send_email(ses_client, SENDER_EMAIL, recipients, subject, html).await
 }
 
 pub async fn send_order_confirmation_email(
@@ -36,7 +45,7 @@ pub async fn send_order_confirmation_email(
     let html = render_order_confirmation(order, items);
     let subject = format!("შეკვეთა {} მიღებულია", order.order_id);
 
-    send_email(ses_client, SENDER_EMAIL, &order.email, &subject, &html).await
+    send_email(ses_client, SENDER_EMAIL, &[&order.email], &subject, &html).await
 }
 
 pub async fn send_operator_order_notification(
@@ -47,7 +56,7 @@ pub async fn send_operator_order_notification(
     let html = render_order_confirmation(order, items);
     let subject = format!("ახალი შეკვეთა {}", order.order_id);
 
-    send_email(ses_client, SENDER_EMAIL, OPERATOR_EMAIL, &subject, &html).await
+    send_email(ses_client, SENDER_EMAIL, &[OPERATOR_EMAIL], &subject, &html).await
 }
 
 fn render_order_confirmation(order: &Order, items: &[OrderItem]) -> String {
@@ -242,14 +251,14 @@ fn format_created_at(dt: &chrono::DateTime<chrono::Utc>) -> String {
         .to_string()
 }
 
-fn format_money(amount: Decimal) -> String {
+pub fn format_money(amount: Decimal) -> String {
     amount
         .to_f64()
         .map(|v| format!("{:.2}", v))
         .unwrap_or_else(|| amount.to_string())
 }
 
-fn html_escape(input: &str) -> String {
+pub fn html_escape(input: &str) -> String {
     input
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -261,12 +270,12 @@ fn html_escape(input: &str) -> String {
 async fn send_email(
     ses_client: &SesClient,
     sender: &str,
-    recipient: &str,
+    recipients: &[&str],
     subject: &str,
     html: &str,
 ) -> Result<()> {
     let destination = aws_sdk_sesv2::types::Destination::builder()
-        .to_addresses(recipient)
+        .set_to_addresses(Some(recipients.iter().map(|r| r.to_string()).collect()))
         .build();
 
     let subject = aws_sdk_sesv2::types::Content::builder()

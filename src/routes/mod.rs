@@ -2,6 +2,8 @@ mod admin;
 mod blogs;
 mod categories;
 mod combo_offers;
+mod companies;
+mod company_pickups;
 mod google_auth;
 mod health;
 mod login;
@@ -37,7 +39,77 @@ pub fn create_router() -> Router<AppState> {
         .route("/payments/callback", post(orders::flitt_callback))
         .route("/payments/redirect", get(orders::payment_redirect))
         .merge(admin_routes())
+        .merge(company_routes())
         .merge(operator_routes())
+}
+
+fn company_routes() -> Router<AppState> {
+    Router::new()
+        .route("/admin/companies", get(companies::search_companies))
+        .route("/admin/companies", post(companies::create_company))
+        .route("/admin/companies/report", get(companies::get_report))
+        .route("/admin/companies/export", get(companies::export_companies))
+        .route("/admin/companies/{id}", get(companies::get_company))
+        .route("/admin/companies/{id}", put(companies::update_company))
+        .route("/admin/companies/{id}", delete(companies::delete_company))
+        .route(
+            "/admin/companies/{id}/addresses",
+            post(companies::create_address),
+        )
+        .route(
+            "/admin/companies/{id}/addresses/{address_id}",
+            put(companies::update_address).delete(companies::delete_address),
+        )
+        .route(
+            "/admin/companies/{id}/contacts",
+            post(companies::create_contact),
+        )
+        .route(
+            "/admin/companies/{id}/contacts/{contact_id}",
+            put(companies::update_contact).delete(companies::delete_contact),
+        )
+        .route(
+            "/admin/companies/{id}/contracts",
+            post(companies::create_contract),
+        )
+        .route(
+            "/admin/companies/{id}/contracts/{contract_id}",
+            put(companies::update_contract).delete(companies::delete_contract),
+        )
+        .route(
+            "/admin/companies/{id}/contracts/{contract_id}/file",
+            put(companies::generate_contract_file_url).delete(companies::delete_contract_file),
+        )
+        .route(
+            "/admin/companies/{id}/tariffs",
+            post(companies::create_tariff),
+        )
+        .route(
+            "/admin/companies/{id}/tariffs/{tariff_id}",
+            delete(companies::delete_tariff),
+        )
+        .route("/admin/contracts", get(companies::list_contracts))
+        .route("/admin/pickups", get(company_pickups::search_pickups))
+        .route("/admin/pickups", post(company_pickups::create_pickup))
+        .route(
+            "/admin/pickups/{id}",
+            put(company_pickups::update_pickup).delete(company_pickups::delete_pickup),
+        )
+        .route(
+            "/admin/pickups/{id}/confirm",
+            post(company_pickups::confirm_pickup),
+        )
+        .route("/admin/invoices", get(company_pickups::search_invoices))
+        .route("/admin/invoices/{id}", get(company_pickups::get_invoice))
+        .route(
+            "/admin/invoices/{id}/send",
+            post(company_pickups::send_invoice),
+        )
+        .route(
+            "/admin/invoices/{id}/payment",
+            patch(company_pickups::set_invoice_payment),
+        )
+        .layer(middleware::from_fn(admin_middleware))
 }
 
 fn auth_routes() -> Router<AppState> {

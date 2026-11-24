@@ -8,7 +8,7 @@ use axum::{
 use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 
-use crate::{config, config::AppConfig, database, error::Result, routes};
+use crate::{config, config::AppConfig, database, error::Result, routes, services};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -30,6 +30,8 @@ pub async fn build(config: &AppConfig) -> Result<Router> {
     let pool = database::create_pool(&config.database).await?;
     let ses_client = config::load_ses_client().await?;
     let s3_client = config::load_s3_client().await?;
+
+    services::contract_alert_service::spawn(pool.clone(), ses_client.clone());
 
     let state = AppState {
         db: pool,
